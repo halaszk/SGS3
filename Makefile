@@ -372,8 +372,10 @@ KBUILD_CFLAGS   := -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs \
 		   -pipe \
 		   -ffast-math \
 		   -mfpu=neon \
+		   -mfloat-abi=softfp \
 		   -march=armv7-a \
-		   -mtune=cortex-a9
+		   -mtune=cortex-a9 \
+		   -mvectorize-with-neon-quad
 KBUILD_AFLAGS_KERNEL :=
 KBUILD_CFLAGS_KERNEL :=
 KBUILD_AFLAGS   := -D__ASSEMBLY__
