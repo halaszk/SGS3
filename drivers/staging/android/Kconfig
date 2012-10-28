@@ -14,7 +14,7 @@ config ANDROID_BINDER_IPC
 
 config ANDROID_LOGGER
 	tristate "Android log driver"
-	default n
+	default m
 
 config ANDROID_RAM_CONSOLE
 	bool "Android RAM buffer console"
