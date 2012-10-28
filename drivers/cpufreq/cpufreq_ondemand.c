@@ -47,6 +47,13 @@
 #define MIN_FREQUENCY_UP_THRESHOLD		(11)
 #define MAX_FREQUENCY_UP_THRESHOLD		(100)
 
+#ifdef CONFIG_CPU_FREQ_LCD_FREQ_DFS
+#define LCD_FREQ_KICK_IN_DOWN_DELAY		(20)
+#define LCD_FREQ_KICK_IN_FREQ			(500000)
+
+extern int _lcdfreq_lock(int lock);
+#endif
+
 /*
  * The polling frequency of this governor depends on the capability of
  * the processor. Default polling frequency is 1000 times the transition
@@ -135,6 +142,12 @@ static struct dbs_tuners {
 	unsigned int flex_sampling_rate;
 	unsigned int flex_duration;
 #endif
+#ifdef CONFIG_CPU_FREQ_LCD_FREQ_DFS
+	int lcdfreq_enable;
+	unsigned int lcdfreq_kick_in_down_delay;
+	unsigned int lcdfreq_kick_in_down_left;
+	unsigned int lcdfreq_kick_in_freq;
+#endif
 } dbs_tuners_ins = {
 	.up_threshold = DEF_FREQUENCY_UP_THRESHOLD,
 	.sampling_down_factor = DEF_SAMPLING_DOWN_FACTOR,
@@ -142,6 +155,12 @@ static struct dbs_tuners {
 	.ignore_nice = 0,
 	.powersave_bias = 0,
 	.freq_step = 100,
+#ifdef CONFIG_CPU_FREQ_LCD_FREQ_DFS
+	.lcdfreq_enable = false,
+	.lcdfreq_kick_in_down_delay = LCD_FREQ_KICK_IN_DOWN_DELAY,
+	.lcdfreq_kick_in_down_left = LCD_FREQ_KICK_IN_DOWN_DELAY,
+	.lcdfreq_kick_in_freq = LCD_FREQ_KICK_IN_FREQ,
+#endif
 };
 
 static inline cputime64_t get_cpu_idle_time_jiffy(unsigned int cpu,
@@ -299,6 +318,12 @@ show_one(ignore_nice_load, ignore_nice);
 show_one(powersave_bias, powersave_bias);
 show_one(down_differential, down_differential);
 show_one(freq_step, freq_step);
+
+#ifdef CONFIG_CPU_FREQ_LCD_FREQ_DFS
+show_one(lcdfreq_enable, lcdfreq_enable);
+show_one(lcdfreq_kick_in_down_delay, lcdfreq_kick_in_down_delay);
+show_one(lcdfreq_kick_in_freq, lcdfreq_kick_in_freq);
+#endif
 
 /**
  * update_sampling_rate - update sampling rate effective immediately if needed.
@@ -522,6 +547,55 @@ static ssize_t store_freq_step(struct kobject *a, struct attribute *b,
 	return count;
 }
 
+#ifdef CONFIG_CPU_FREQ_LCD_FREQ_DFS
+static ssize_t store_lcdfreq_enable(struct kobject *a, struct attribute *b,
+				     const char *buf, size_t count)
+{
+	unsigned int input;
+	int ret;
+
+	ret = sscanf(buf, "%u", &input);
+	if (ret != 1)
+		return -EINVAL;
+
+	if (input > 0)
+		dbs_tuners_ins.lcdfreq_enable = true;
+	else
+		dbs_tuners_ins.lcdfreq_enable = false;
+
+	return count;
+}
+
+static ssize_t store_lcdfreq_kick_in_down_delay(struct kobject *a, struct attribute *b,
+				   const char *buf, size_t count)
+{
+	unsigned int input;
+	int ret;
+
+	ret = sscanf(buf, "%u", &input);
+	if (ret != 1 && input < 0)
+		return -EINVAL;
+
+	dbs_tuners_ins.lcdfreq_kick_in_down_delay = input;
+	dbs_tuners_ins.lcdfreq_kick_in_down_left =
+				  dbs_tuners_ins.lcdfreq_kick_in_down_delay;
+	return count;
+}
+
+static ssize_t store_lcdfreq_kick_in_freq(struct kobject *a, struct attribute *b,
+				   const char *buf, size_t count)
+{
+	unsigned int input;
+	int ret;
+
+	ret = sscanf(buf, "%u", &input);
+	if (ret != 1)
+		return -EINVAL;
+
+	dbs_tuners_ins.lcdfreq_kick_in_freq = input;
+	return count;
+}
+#endif
 
 define_one_global_rw(sampling_rate);
 define_one_global_rw(io_is_busy);
@@ -537,6 +611,11 @@ static struct global_attr flexrate_duration;
 static struct global_attr flexrate_enable;
 static struct global_attr flexrate_forcerate;
 static struct global_attr flexrate_num_effective_usage;
+#endif
+#ifdef CONFIG_CPU_FREQ_LCD_FREQ_DFS
+define_one_global_rw(lcdfreq_enable);
+define_one_global_rw(lcdfreq_kick_in_down_delay);
+define_one_global_rw(lcdfreq_kick_in_freq);
 #endif
 
 static struct attribute *dbs_attributes[] = {
@@ -556,6 +635,11 @@ static struct attribute *dbs_attributes[] = {
 	&flexrate_forcerate.attr,
 	&flexrate_num_effective_usage.attr,
 #endif
+#ifdef CONFIG_CPU_FREQ_LCD_FREQ_DFS
+	&lcdfreq_enable.attr,
+	&lcdfreq_kick_in_down_delay.attr,
+	&lcdfreq_kick_in_freq.attr,
+#endif
 	NULL
 };
 
@@ -573,7 +657,7 @@ static void franco_hotplug(struct cpu_dbs_info_s *this_dbs_info, unsigned int j,
 	min_cur = policy->min;
 	tick = 0;
 	
-	if (load <= 20) {
+	if (load <= 25) {
 		if (!cpu_online(1) && !cpu_online(2) && !cpu_online(3))
 			return;
 			
@@ -581,14 +665,14 @@ static void franco_hotplug(struct cpu_dbs_info_s *this_dbs_info, unsigned int j,
 			if (j > 0)
 				cpu_down(j);
 		}
-		if (min_cur < 500000)
-			policy->min = 500000;
+		//if (min_cur < 500000)
+		//	policy->min = 500000;
 	} 
-	if (load > 20 && load <= 40) {
+	if (load > 25 && load <= 50) {
 		if (!cpu_online(2))
 			cpu_up(2);
 	} 
-	if (load > 40 && load <= 65) {
+	if (load > 50 && load <= 75) {
 		if (!cpu_online(1))
 			cpu_up(1);
 		if (!cpu_online(2))
@@ -596,7 +680,7 @@ static void franco_hotplug(struct cpu_dbs_info_s *this_dbs_info, unsigned int j,
 		if (min_cur == 500000)
 			policy->min = 200000;
 	}
-	if (load > 65) {
+	if (load > 85) {
 		if (!cpu_online(1))
 			cpu_up(1);
 		if (!cpu_online(2))
@@ -724,6 +808,16 @@ static void dbs_check_cpu(struct cpu_dbs_info_s *this_dbs_info)
 			this_dbs_info->rate_mult =
 				dbs_tuners_ins.sampling_down_factor;
 		dbs_freq_increase(policy, target);
+#ifdef CONFIG_CPU_FREQ_LCD_FREQ_DFS
+		if(dbs_tuners_ins.lcdfreq_enable) {
+			if(target > dbs_tuners_ins.lcdfreq_kick_in_freq) {
+				dbs_tuners_ins.lcdfreq_kick_in_down_left =
+				  dbs_tuners_ins.lcdfreq_kick_in_down_delay;
+				_lcdfreq_lock(0);
+			} else 
+				dbs_tuners_ins.lcdfreq_kick_in_down_left--;
+		}
+#endif
 		return;
 	}
 
@@ -746,7 +840,18 @@ static void dbs_check_cpu(struct cpu_dbs_info_s *this_dbs_info)
 		freq_next = max_load_freq /
 				(dbs_tuners_ins.up_threshold -
 				 dbs_tuners_ins.down_differential);
-
+#ifdef CONFIG_CPU_FREQ_LCD_FREQ_DFS
+		if(dbs_tuners_ins.lcdfreq_enable) {
+			if(dbs_tuners_ins.lcdfreq_kick_in_freq < freq_next) {
+				dbs_tuners_ins.lcdfreq_kick_in_down_left =
+				  dbs_tuners_ins.lcdfreq_kick_in_down_delay;
+			} else if(dbs_tuners_ins.lcdfreq_kick_in_down_left <= 0) {
+				_lcdfreq_lock(1);
+			} else {
+				dbs_tuners_ins.lcdfreq_kick_in_down_left--;
+			}
+		}
+#endif
 		/* No longer fully busy, reset rate_mult */
 		this_dbs_info->rate_mult = 1;
 
@@ -863,10 +968,16 @@ static int should_io_be_busy(void)
 #endif
 	return 0;
 }
-
+#ifdef CONFIG_CPU_FREQ_LCD_FREQ_DFS
+int prev_lcdfreq_enable;
+#endif
 static int cpufreq_governor_dbs(struct cpufreq_policy *policy,
 				   unsigned int event)
 {
+#ifdef CONFIG_CPU_FREQ_LCD_FREQ_DFS
+	prev_lcdfreq_enable = dbs_tuners_ins.lcdfreq_enable;
+	dbs_tuners_ins.lcdfreq_enable = false;
+#endif
 	unsigned int cpu = policy->cpu;
 	struct cpu_dbs_info_s *this_dbs_info;
 	unsigned int j;
@@ -927,6 +1038,9 @@ static int cpufreq_governor_dbs(struct cpufreq_policy *policy,
 		break;
 
 	case CPUFREQ_GOV_STOP:
+	#ifdef CONFIG_CPU_FREQ_LCD_FREQ_DFS
+		_lcdfreq_lock(0);
+#endif
 		dbs_timer_exit(this_dbs_info);
 
 		mutex_lock(&dbs_mutex);
@@ -1078,6 +1192,14 @@ int cpufreq_ondemand_flexrate_request(unsigned int rate_us,
 {
 	int err = 0;
 
+	#ifdef CONFIG_CPU_FREQ_LCD_FREQ_DFS
+	/* hijack flexrate request as a touch lcdfreq boost */
+	if(dbs_tuners_ins.lcdfreq_enable) {
+		_lcdfreq_lock(0);
+		dbs_tuners_ins.lcdfreq_kick_in_down_left =
+				  dbs_tuners_ins.lcdfreq_kick_in_down_delay;
+	}
+#endif
 	if (!flexrate_enabled)
 		return 0;
 
