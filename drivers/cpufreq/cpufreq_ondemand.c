@@ -104,7 +104,7 @@ struct cpu_dbs_info_s {
 	 */
 	struct mutex timer_mutex;
 	bool activated; /* dbs_timer_init is in effect */
-#ifdef CONFIG_CPU_FREQ_GOV_ONDEMAND_FLEXRATE
+#ifdef CONFIG_CPU_FREQ_GOV_ONDEMAND_FLEXRATES
 	unsigned int flex_duration;
 #endif
 };
@@ -116,7 +116,7 @@ static unsigned int dbs_enable;	/* number of CPUs using this policy */
  * dbs_mutex protects dbs_enable in governor start/stop.
  */
 static DEFINE_MUTEX(dbs_mutex);
-#ifdef CONFIG_CPU_FREQ_GOV_ONDEMAND_FLEXRATE
+#ifdef CONFIG_CPU_FREQ_GOV_ONDEMAND_FLEXRATES
 static DEFINE_MUTEX(flex_mutex);
 #endif
 
@@ -131,7 +131,7 @@ static struct dbs_tuners {
 	struct notifier_block dvfs_lat_qos_db;
 	unsigned int dvfs_lat_qos_wants;
 	unsigned int freq_step;
-#ifdef CONFIG_CPU_FREQ_GOV_ONDEMAND_FLEXRATE
+#ifdef CONFIG_CPU_FREQ_GOV_ONDEMAND_FLEXRATES
 	unsigned int flex_sampling_rate;
 	unsigned int flex_duration;
 #endif
@@ -531,7 +531,7 @@ define_one_global_rw(ignore_nice_load);
 define_one_global_rw(powersave_bias);
 define_one_global_rw(down_differential);
 define_one_global_rw(freq_step);
-#ifdef CONFIG_CPU_FREQ_GOV_ONDEMAND_FLEXRATE
+#ifdef CONFIG_CPU_FREQ_GOV_ONDEMAND_FLEXRATES
 static struct global_attr flexrate_request;
 static struct global_attr flexrate_duration;
 static struct global_attr flexrate_enable;
@@ -549,7 +549,7 @@ static struct attribute *dbs_attributes[] = {
 	&io_is_busy.attr,
 	&down_differential.attr,
 	&freq_step.attr,
-#ifdef CONFIG_CPU_FREQ_GOV_ONDEMAND_FLEXRATE
+#ifdef CONFIG_CPU_FREQ_GOV_ONDEMAND_FLEXRATES
 	&flexrate_request.attr,
 	&flexrate_duration.attr,
 	&flexrate_enable.attr,
@@ -800,7 +800,7 @@ static void do_dbs_timer(struct work_struct *work)
 			dbs_info->freq_lo, CPUFREQ_RELATION_H);
 		delay = dbs_info->freq_lo_jiffies;
 	}
-#ifdef CONFIG_CPU_FREQ_GOV_ONDEMAND_FLEXRATE
+#ifdef CONFIG_CPU_FREQ_GOV_ONDEMAND_FLEXRATES
 	if (dbs_info->flex_duration) {
 		struct cpufreq_policy *policy = dbs_info->cur_policy;
 
@@ -816,7 +816,7 @@ static void do_dbs_timer(struct work_struct *work)
 		}
 		mutex_unlock(&flex_mutex);
 	}
-#endif /* CONFIG_CPU_FREQ_GOV_ONDEMAND_FLEXRATE */
+#endif /* CONFIG_CPU_FREQ_GOV_ONDEMAND_FLEXRATES */
 	schedule_delayed_work_on(cpu, &dbs_info->work, delay);
 	mutex_unlock(&dbs_info->timer_mutex);
 }
@@ -1029,9 +1029,9 @@ static void __exit cpufreq_gov_dbs_exit(void)
 	cpufreq_unregister_governor(&cpufreq_gov_ondemand);
 }
 
-#ifdef CONFIG_CPU_FREQ_GOV_ONDEMAND_FLEXRATE
+#ifdef CONFIG_CPU_FREQ_GOV_ONDEMAND_FLEXRATES
 static unsigned int max_duration =
-		(CONFIG_CPU_FREQ_GOV_ONDEMAND_FLEXRATE_MAX_DURATION);
+		(CONFIG_CPU_FREQ_GOV_ONDEMAND_FLEXRATES_MAX_DURATION);
 #define DEFAULT_DURATION	(5)
 static unsigned int sysfs_duration = DEFAULT_DURATION;
 static bool flexrate_enabled = true;
