@@ -969,13 +969,13 @@ static int should_io_be_busy(void)
 	return 0;
 }
 #ifdef CONFIG_CPU_FREQ_LCD_FREQ_DFS
-int prev_lcdfreq_enable;
+int prev_lcdfreq_enable_ondemand;
 #endif
 static int cpufreq_governor_dbs(struct cpufreq_policy *policy,
 				   unsigned int event)
 {
 #ifdef CONFIG_CPU_FREQ_LCD_FREQ_DFS
-	prev_lcdfreq_enable = dbs_tuners_ins.lcdfreq_enable;
+	prev_lcdfreq_enable_ondemand = dbs_tuners_ins.lcdfreq_enable;
 	dbs_tuners_ins.lcdfreq_enable = false;
 #endif
 	unsigned int cpu = policy->cpu;
