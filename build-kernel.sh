@@ -12,6 +12,7 @@ export USE_SEC_FIPS_MODE=true
 # build script
 export USER=`whoami`
 CROSS_COMPILE=$PARENT_DIR/android_prebuilt/linux-x86/toolchain/arm-eabi-4.4.3/bin/arm-eabi-
+#CROSS_COMPILE=/home/halaszk/android_build/SGS2/kernel/Dorimanx-SG2-I9100-Kernel/linaro-12-android-toolchain/bin/arm-eabi-
 
 if [ "${1}" != "" ];then
 export KERNELDIR=`readlink -f ${1}`
@@ -110,9 +111,11 @@ rm $KERNELDIR/READY/Kernel_halaszk-*
 stat $KERNELDIR/boot.img
 cp $KERNELDIR/boot.img /$KERNELDIR/READY/boot/
 cd $KERNELDIR/READY/
-GETVER=`grep 'halaszk-Alpha-V' .config | cut -c 38-42`
-zip -r Kernel_halaszk-Alpha-$GETVER-`date +"-%H-%M--%d-%m-12-SGIII-PWR-CORE"`.zip .
+GETVER=`grep 'halaszk-Alpha-V' .config | cut -c 38-41`
+zip -r Kernel_halaszk-Alpha-$GETVER-`date +"-%H-%M--%d-%m-12-SGSIII-PWR-CORE"`.zip .
 rm $KERNELDIR/boot.img
 rm $KERNELDIR/READY/boot/boot.img
 rm $KERNELDIR/READY/.config
-ncftpput -f /home/halaszk/login.cfg -V -R / $KERNELDIR/READY/
+mv $KERNELDIR/READY/Kernel_halaszk-* $KERNELDIR/SGSIII/
+ncftpput -f /home/halaszk/login.cfg -V -R / $KERNELDIR/SGSIII/
+rm $KERNELDIR/SGSIII/Kernel_halaszk-*
