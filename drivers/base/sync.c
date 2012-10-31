@@ -517,7 +517,7 @@ int sync_fence_wait(struct sync_fence *fence, long timeout)
 {
 	int err;
 
-		struct sync_pt *pt;
+	//	struct sync_pt *pt;
 
 	//trace_sync_wait(fence, 1);
 	//list_for_each_entry(pt, &fence->pt_list_head, pt_list)
