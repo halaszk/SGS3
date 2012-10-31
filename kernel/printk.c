@@ -832,7 +832,7 @@ asmlinkage int printk(const char *fmt, ...)
 	va_list args;
 	int r;
 
-	return 0; // AP disable printk
+	//return 0; // AP disable printk
 
 #ifdef CONFIG_KGDB_KDB
 	if (unlikely(kdb_trap_printk)) {
@@ -929,7 +929,7 @@ asmlinkage int vprintk(const char *fmt, va_list args)
 	size_t plen;
 	char special;
 
-	return 0; // AP disable printk
+	//return 0; // AP disable printk
 
 	boot_delay_msec();
 	printk_delay();

@@ -27,8 +27,8 @@
 
 #include <linux/anon_inodes.h>
 
-#define CREATE_TRACE_POINTS
-#include <trace/events/sync.h>
+//#define CREATE_TRACE_POINTS
+//#include <trace/events/sync.h>
 
 static void sync_fence_signal_pt(struct sync_pt *pt);
 static int _sync_pt_has_signaled(struct sync_pt *pt);
@@ -135,7 +135,7 @@ void sync_timeline_signal(struct sync_timeline *obj)
 	LIST_HEAD(signaled_pts);
 	struct list_head *pos, *n;
 
-	trace_sync_timeline(obj);
+	//trace_sync_timeline(obj);
 
 	spin_lock_irqsave(&obj->active_list_lock, flags);
 
@@ -430,7 +430,7 @@ struct sync_fence *sync_fence_merge(const char *name,
 	if (err < 0)
 		goto err;
 
-	err = sync_fence_merge_pts(fence, b);
+	err = sync_fence_copy_pts(fence, b);
 	if (err < 0)
 		goto err;
 
@@ -515,15 +515,15 @@ out:
 
 int sync_fence_wait(struct sync_fence *fence, long timeout)
 {
-	int err = 0;
+	int err;
 	
-		struct sync_pt *pt;
+	//	struct sync_pt *pt;
 
-	trace_sync_wait(fence, 1);
-	list_for_each_entry(pt, &fence->pt_list_head, pt_list)
-	trace_sync_pt(pt);
+	//trace_sync_wait(fence, 1);
+	//list_for_each_entry(pt, &fence->pt_list_head, pt_list)
+	//trace_sync_pt(pt);
 
-	if (timeout > 0) {
+	if (timeout) {
 		timeout = msecs_to_jiffies(timeout);
 		err = wait_event_interruptible_timeout(fence->wq,
 						       fence->status != 0,
@@ -531,7 +531,7 @@ int sync_fence_wait(struct sync_fence *fence, long timeout)
 	} else {
 		err = wait_event_interruptible(fence->wq, fence->status != 0);
 	}
-trace_sync_wait(fence, 0);
+	//trace_sync_wait(fence, 0);
 	if (err < 0)
 		return err;
 
