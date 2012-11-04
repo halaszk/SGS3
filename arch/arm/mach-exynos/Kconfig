@@ -1809,3 +1809,10 @@ config CPU_FREQ_TETHERING
 	bool "Lock cpu freq & bus clock when tethering mode turn on"
 	depends on QC_MODEM
 	default n
+
+config CHARGE_LEVEL
+bool "Charge level interface"
+default y
+help
+Allows configuration of ac and usb charging levels
+
