@@ -132,7 +132,7 @@ enum {
 /* Touch booster */
 #if defined(CONFIG_EXYNOS4_CPUFREQ) &&\
 	defined(CONFIG_BUSFREQ_OPP)
-#define TOUCH_BOOSTER			0
+#define TOUCH_BOOSTER			1
 #define TOUCH_BOOSTER_OFF_TIME		100
 #define TOUCH_BOOSTER_CHG_TIME		200
 #else
@@ -409,17 +409,18 @@ static void set_dvfs_off(struct work_struct *work)
 	mutex_unlock(&info->dvfs_lock);
 	}
 
+int touch_boost_level = 10;
 static void set_dvfs_lock(struct mms_ts_info *info, uint32_t on)
 {
 	int ret;
 
 	mutex_lock(&info->dvfs_lock);
-	if (info->cpufreq_level <= 0) {
-		ret = exynos_cpufreq_get_level(800000, &info->cpufreq_level);
-		if (ret < 0)
-			pr_err("[TSP] exynos_cpufreq_get_level error");
-		goto out;
-	}
+//	if (info->cpufreq_level <= 0) {
+//		ret = exynos_cpufreq_get_level(800000, &info->cpufreq_level);
+//		if (ret < 0)
+//			pr_err("[TSP] exynos_cpufreq_get_level error");
+//		goto out;
+//	}
 	if (on == 0) {
 		if (info->dvfs_lock_status) {
 			cancel_delayed_work(&info->work_dvfs_chg);
@@ -429,7 +430,7 @@ static void set_dvfs_lock(struct mms_ts_info *info, uint32_t on)
 
 	} else if (on == 1) {
 		cancel_delayed_work(&info->work_dvfs_off);
-		if (!info->dvfs_lock_status) {
+		if (!info->dvfs_lock_status &&   touch_boost_level >= 0) {
 			ret = dev_lock(bus_dev, sec_touchscreen, 400200);
 			if (ret < 0) {
 				pr_err("%s: dev lock failed(%d)\n",\
@@ -437,7 +438,7 @@ static void set_dvfs_lock(struct mms_ts_info *info, uint32_t on)
 }
 
 			ret = exynos_cpufreq_lock(DVFS_LOCK_ID_TSP,
-							info->cpufreq_level);
+							touch_boost_level);
 			if (ret < 0)
 				pr_err("%s: cpu lock failed(%d)\n",\
 							__func__, __LINE__);
@@ -446,7 +447,7 @@ static void set_dvfs_lock(struct mms_ts_info *info, uint32_t on)
 				msecs_to_jiffies(TOUCH_BOOSTER_CHG_TIME));
 
 			info->dvfs_lock_status = true;
-			pr_debug("[TSP] DVFS On![%d]", info->cpufreq_level);
+			pr_debug("[TSP] DVFS On![%d]", touch_boost_level);
 		}
 	} else if (on == 2) {
 		cancel_delayed_work(&info->work_dvfs_off);
