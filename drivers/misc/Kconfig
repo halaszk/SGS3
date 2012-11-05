@@ -732,4 +732,9 @@ config SLP_PROCESS_MON
 	  Providing monitoring important processes. Users can register the process
 	  with sysfs.
 
+config M0_MODS
+tristate "i9300 specific modifications"
+depends on VIDEO_MALI400MP
+default m
+	  
 endif # MISC_DEVICES
