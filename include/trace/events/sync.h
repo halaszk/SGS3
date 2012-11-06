@@ -1,4 +1,4 @@
-#undef TRACE_SYSTEM
+/*#undef TRACE_SYSTEM
 #define TRACE_SYSTEM sync
 
 #if !defined(_TRACE_SYNC_H) || defined(TRACE_HEADER_MULTI_READ)
@@ -76,7 +76,8 @@ TRACE_EVENT(sync_pt,
 	    TP_printk("name=%s value=%s", __get_str(timeline), __entry->value)
 	);
 
-#endif /* if !defined(_TRACE_SYNC_H) || defined(TRACE_HEADER_MULTI_READ) */
+#endif *//* if !defined(_TRACE_SYNC_H) || defined(TRACE_HEADER_MULTI_READ) */
 
 /* This part must be outside protection */
-#include <trace/define_trace.h>
+//#include <trace/define_trace.h>
+
