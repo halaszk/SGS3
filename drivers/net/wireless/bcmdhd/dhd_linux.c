@@ -3532,6 +3532,7 @@ int
 dhd_preinit_ioctls(dhd_pub_t *dhd)
 {
 	int ret = 0;
+	uint power_mode;
 	char eventmask[WL_EVENTING_MASK_LEN];
 	char iovbuf[WL_EVENTING_MASK_LEN + 12];	/*  Room for "event_msgs" + '\0' + bitvec  */
 
