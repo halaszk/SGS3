@@ -502,24 +502,6 @@ declare_store(min_bl) {
 	return size;
 }
 //#endif
-
-declare_store(max_gamma) {	
-	int val;
-	if(sscanf(buf,"%d",&val)==1) {
-		if(val>GAMMA_MAX - 1) val=GAMMA_MAX - 1;
-		else if(val<0) val=0;
-		max_gamma = val;
-	}
-	return size;
-}
-declare_store(min_bl) {	
-	int val;
-	if(sscanf(buf,"%d",&val)==1) {
-		if(val>200) val=200;
-		else if(val<0) val=0;
-		min_bl = val;
-	}
-	return size;
 }
 
 #define declare_attr_rw(filename, perm) \
