@@ -26,6 +26,8 @@
 #include <plat/regs-dsim.h>
 #include <mach/dsim.h>
 #include <mach/mipi_ddi.h>
+#include <linux/device.h>
+#include <linux/miscdevice.h>
 #ifdef CONFIG_HAS_EARLYSUSPEND
 #include <linux/earlysuspend.h>
 #endif
@@ -502,7 +504,6 @@ declare_store(min_bl) {
 	return size;
 }
 //#endif
-}
 
 #define declare_attr_rw(filename, perm) \
 	static DEVICE_ATTR(filename, perm, show_##filename, store_##filename)
