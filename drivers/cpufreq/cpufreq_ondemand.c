@@ -672,7 +672,7 @@ static void franco_hotplug(struct cpu_dbs_info_s *this_dbs_info, unsigned int j,
 		if (!cpu_online(2))
 			cpu_up(2);
 	} 
-	if (load > 60 && load <= 85) {
+	else if (load > 60 && load <= 85) {
 		if (!cpu_online(1))
 			cpu_up(1);
 		if (!cpu_online(2))
@@ -680,7 +680,7 @@ static void franco_hotplug(struct cpu_dbs_info_s *this_dbs_info, unsigned int j,
 		if (min_cur == 500000)
 			policy->min = 200000;
 	}
-	if (load > 85) {
+	else if (load > 85) {
 		if (!cpu_online(1))
 			cpu_up(1);
 		if (!cpu_online(2))
