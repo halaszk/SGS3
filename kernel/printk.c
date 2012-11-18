@@ -41,6 +41,7 @@
 #include <linux/cpu.h>
 #include <linux/notifier.h>
 #include <linux/rculist.h>
+#include "printk_interface.h"
 
 #include <asm/uaccess.h>
 #include <mach/sec_debug.h>
@@ -831,8 +832,10 @@ asmlinkage int printk(const char *fmt, ...)
 {
 	va_list args;
 	int r;
-
-	//return 0; // AP disable printk
+	if (printk_mode == 0)
+	{
+	return 0; // AP disable printk
+	}
 
 #ifdef CONFIG_KGDB_KDB
 	if (unlikely(kdb_trap_printk)) {
@@ -928,8 +931,11 @@ asmlinkage int vprintk(const char *fmt, va_list args)
 	char *p;
 	size_t plen;
 	char special;
-
-	//return 0; // AP disable printk
+	
+	if (printk_mode == 0)
+	{
+	return 0; // AP disable printk
+	}
 
 	boot_delay_msec();
 	printk_delay();
