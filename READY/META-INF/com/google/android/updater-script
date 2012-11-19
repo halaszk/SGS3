@@ -4,12 +4,15 @@ assert(getprop("ro.product.device") == "m0" || getprop("ro.build.product") == "m
 #unmount("/cache");
 show_progress(0.100000, 40); ui_print("Flashing the kernel"); 
 assert(package_extract_file("boot/boot.img", "/tmp/boot.img"),
-assert(package_extract_file("recovery/recovery.img", "/tmp/recovery.img"),
-show_progress(0.100000, 70); write_raw_image("/tmp/boot.img", "/dev/block/mmcblk0p5"),
-show_progress(0.100000, 80); ui_print("Flashing the kernel");
-write_raw_image("/tmp/recovery.img", "/dev/block/mmcblk0p6"),
-show_progress(0.100000, 90); delete("/tmp/boot.img"));
-delete("/tmp/recovery.img"));
+#assert(package_extract_file("recovery/recovery.img", "/tmp/recovery.img"),
+show_progress(0.100000, 70); 
+write_raw_image("/tmp/boot.img", "/dev/block/mmcblk0p5"),
+show_progress(0.100000, 80); 
+ui_print("Flashing the kernel");
+#write_raw_image("/tmp/recovery.img", "/dev/block/mmcblk0p6"),
+show_progress(0.100000, 90); 
+delete("/tmp/boot.img"));
+#delete("/tmp/recovery.img"));
 show_progress(0.100000, 100); 
 ui_print("");
 ui_print(" * Installation Completed! Kernel and recovery installed! *");
