@@ -11,8 +11,8 @@ export USE_SEC_FIPS_MODE=true
 
 # build script
 export USER=`whoami`
-CROSS_COMPILE=$PARENT_DIR/android_prebuilt/linux-x86/toolchain/arm-eabi-4.4.3/bin/arm-eabi-
-#CROSS_COMPILE=/home/halaszk/android_build/SGS2/kernel/Dorimanx-SG2-I9100-Kernel/linaro-12-android-toolchain/bin/arm-eabi-
+export CROSS_COMPILE=$PARENT_DIR/android_prebuilt/linux-x86/toolchain/arm-eabi-4.4.3/bin/arm-eabi-
+#export CROSS_COMPILE=/home/halaszk/android_build/SGS2/kernel/Dorimanx-SG2-I9100-Kernel/linaro-12-android-toolchain/bin/arm-eabi-
 
 if [ "${1}" != "" ];then
 export KERNELDIR=`readlink -f ${1}`
