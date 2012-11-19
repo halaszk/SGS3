@@ -111,8 +111,8 @@ rm $KERNELDIR/READY/Kernel_halaszk-*
 stat $KERNELDIR/boot.img
 cp $KERNELDIR/boot.img /$KERNELDIR/READY/boot/
 cd $KERNELDIR/READY/
-GETVER=`grep 'halaszk-Alpha-V' .config | cut -c 38-41`
-zip -r Kernel_halaszk-Alpha-$GETVER-`date +"-%H-%M--%d-%m-12-SGSIII-PWR-CORE"`.zip .
+GETVER=`grep 'halaszk-V' .config | cut -c 32-35`
+zip -r Kernel_halaszk-$GETVER-`date +"-%H-%M--%d-%m-12-SGSIII-PWR-CORE"`.zip .
 rm $KERNELDIR/boot.img
 rm $KERNELDIR/READY/boot/boot.img
 rm $KERNELDIR/READY/.config
