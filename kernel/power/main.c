@@ -348,8 +348,7 @@ power_attr(wake_unlock);
 #endif
 
 #ifdef CONFIG_DVFS_LIMIT
-int cpufreq_max_limit_val = -1;
-int cpufreq_max_limit_coupled = SCALING_MAX_UNDEFINED; /* Yank555.lu - not yet defined at startup */
+static int cpufreq_max_limit_val = -1;
 static int cpufreq_min_limit_val = -1;
 DEFINE_MUTEX(cpufreq_limit_mutex);
 
@@ -403,7 +402,7 @@ static ssize_t cpufreq_table_store(struct kobject *kobj,
 }
 
 #define VALID_LEVEL 1
-int get_cpufreq_level(unsigned int freq, unsigned int *level)
+static int get_cpufreq_level(unsigned int freq, unsigned int *level)
 {
 	struct cpufreq_frequency_table *table;
 	unsigned int i = 0;
@@ -437,14 +436,24 @@ static ssize_t cpufreq_max_limit_store(struct kobject *kobj,
 struct kobj_attribute *attr,
 const char *buf, size_t n)
 {
+<<<<<<< HEAD
 int val;
 unsigned int cpufreq_level;
 int lock_ret;
 ssize_t ret = -EINVAL;
 struct cpufreq_policy *policy;
+=======
+	int val;
+	unsigned int cpufreq_level;
+	int lock_ret;
+	ssize_t ret = -EINVAL;
+
+	mutex_lock(&cpufreq_limit_mutex);
+>>>>>>> parent of c20fafd... Dynamically adjust cpu_max_limit according to scaling_max setting without breaking power save mode tnx yank555-lu
 
 mutex_lock(&cpufreq_limit_mutex);
 
+<<<<<<< HEAD
 if (sscanf(buf, "%d", &val) != 1) {
 printk(KERN_ERR "%s: Invalid cpufreq format\n", __func__);
 goto out;
@@ -481,6 +490,35 @@ cpufreq_max_limit_val = val;
 printk(KERN_ERR "%s: Lock request is invalid\n",
 __func__);
 }
+=======
+	if (val == -1) { /* Unlock request */
+		if (cpufreq_max_limit_val != -1) {
+			exynos_cpufreq_upper_limit_free(DVFS_LOCK_ID_USER);
+			cpufreq_max_limit_val = -1;
+		} else /* Already unlocked */
+			printk(KERN_ERR "%s: Unlock request is ignored\n",
+				__func__);
+	} else { /* Lock request */
+		if (val < 1400000) {
+			val = 1000000;
+
+		if (get_cpufreq_level((unsigned int)val, &cpufreq_level)
+		    == VALID_LEVEL) {
+			if (cpufreq_max_limit_val != -1)
+				/* Unlock the previous lock */
+				exynos_cpufreq_upper_limit_free(
+					DVFS_LOCK_ID_USER);
+			lock_ret = exynos_cpufreq_upper_limit(
+					DVFS_LOCK_ID_USER, cpufreq_level);
+			/* ret of exynos_cpufreq_upper_limit is meaningless.
+			   0 is fail? success? */
+			cpufreq_max_limit_val = val;
+		} else /* Invalid lock request --> No action */
+			printk(KERN_ERR "%s: Lock request is invalid\n",
+				__func__);
+		}
+	}
+>>>>>>> parent of c20fafd... Dynamically adjust cpu_max_limit according to scaling_max setting without breaking power save mode tnx yank555-lu
 
 ret = n;
 out:
