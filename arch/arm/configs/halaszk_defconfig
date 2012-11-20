@@ -1,6 +1,6 @@
 #
 # Automatically generated make config: don't edit
-# Linux/arm 3.0.51 Kernel Configuration
+# Linux/arm 3.0.52 Kernel Configuration
 #
 CONFIG_ARM=y
 CONFIG_HAVE_PWM=y
@@ -36,7 +36,7 @@ CONFIG_HAVE_IRQ_WORK=y
 #
 CONFIG_EXPERIMENTAL=y
 CONFIG_INIT_ENV_ARG_LIMIT=32
-CONFIG_CROSS_COMPILE="/usr/local/arm/arm-eabi-4.4.3/bin/arm-eabi-"
+CONFIG_CROSS_COMPILE=""
 CONFIG_LOCALVERSION="-halaszk-V1.36a"
 # CONFIG_LOCALVERSION_AUTO is not set
 CONFIG_HAVE_KERNEL_GZIP=y
@@ -1411,6 +1411,7 @@ CONFIG_BCMDHD_FW_PATH="/system/etc/firmware/fw_bcmdhd.bin"
 CONFIG_BCMDHD_NVRAM_PATH="/system/etc/wifi/bcmdhd.cal"
 CONFIG_BROADCOM_WIFI_RESERVED_MEM=y
 CONFIG_WLAN_REGION_CODE=100
+CONFIG_BCM4334_CM=y
 # CONFIG_HOSTAP is not set
 # CONFIG_IWM is not set
 # CONFIG_LIBERTAS is not set
