@@ -65,6 +65,9 @@ int max_y;
 typedef struct gesture_point gesture_points_t[MAX_GESTURES][MAX_GESTURE_FINGERS][MAX_GESTURE_STEPS];
 static gesture_points_t gesture_points = { { { { 0, 0, 0, 0 } } } };
 
+static int max_configured_gesture = -1;
+static int max_gesture_finger[MAX_GESTURES] = { -1 };
+
 typedef int gestures_step_count_t[MAX_GESTURES][MAX_GESTURE_FINGERS];
 static gestures_step_count_t gestures_step_count = { { 0 } };
 
@@ -77,6 +80,7 @@ int finger_order;
 int current_step;
 };
 static struct gesture_finger gesture_fingers[MAX_GESTURES][MAX_GESTURE_FINGERS] = { { { -1, -1 } } };
+static bool gestures_enabled = true;
 
 DECLARE_WAIT_QUEUE_HEAD(gestures_wq);
 static spinlock_t gestures_lock;
@@ -647,6 +651,8 @@ static irqreturn_t mms_ts_interrupt(int irq, void *dev_id)
 	int step;
 	bool fingers_completed;
 	unsigned long flags;
+	bool track_gestures;
+	track_gestures = gestures_enabled;
 	#endif
 	
 	sz = i2c_smbus_read_byte_data(client, MMS_INPUT_EVENT_PKT_SZ);
@@ -735,17 +741,18 @@ static irqreturn_t mms_ts_interrupt(int irq, void *dev_id)
 				id, x, y, tmp[5], tmp[4], tmp[6], tmp[7]
 				, angle, palm);
 #else
-			if (info->finger_state[id] != 0) {
-			
-			#ifdef CONFIG_TOUCHSCREEN_GESTURES
+
+	if (info->finger_state[id] != 0) {
+#ifdef CONFIG_TOUCHSCREEN_GESTURES
+if (track_gestures) {
 // When a finger is released and its movement was not completed yet, reset it
 spin_lock_irqsave(&gestures_lock, flags);
-for (gesture_no = 0; gesture_no < MAX_GESTURES; gesture_no++) {
+for (gesture_no = 0; gesture_no <= max_configured_gesture; gesture_no++) {
 if (gestures_detected[gesture_no])
 // Ignore gestures already reported
 continue;
 
-for (finger_no = 0; finger_no < MAX_GESTURE_FINGERS; finger_no++) {
+for (finger_no = 0; finger_no <= max_gesture_finger[gesture_no]; finger_no++) {
 if (gesture_fingers[gesture_no][finger_no].finger_order == i) {
 // Found a match for ongoing movement
 // Reset the finger progress if path not completed
@@ -759,6 +766,7 @@ break;
 }
 }
 spin_unlock_irqrestore(&gestures_lock, flags);
+}
 #endif
 			
 #if defined(SEC_TSP_EVENT_DEBUG) && defined(CONFIG_TARGET_LOCALE_KOR)
@@ -780,17 +788,18 @@ spin_unlock_irqrestore(&gestures_lock, flags);
 			continue;
 		}
 		
-		#ifdef CONFIG_TOUCHSCREEN_GESTURES
+#ifdef CONFIG_TOUCHSCREEN_GESTURES
+if (track_gestures) {
 // Finger being moved, check the gesture steps progress
 spin_lock_irqsave(&gestures_lock, flags);
-for (gesture_no = 0; gesture_no < MAX_GESTURES; gesture_no++) {
+for (gesture_no = 0; gesture_no <= max_configured_gesture; gesture_no++) {
 if (gestures_detected[gesture_no])
 // Ignore further movement for gestures already reported
 continue;
 
 // Find which finger definition this touch maps to
 finger_pos = -1;
-for (finger_no = 0; finger_no < MAX_GESTURE_FINGERS; finger_no++) {
+for (finger_no = 0; finger_no <= max_gesture_finger[gesture_no]; finger_no++) {
 if (gesture_fingers[gesture_no][finger_no].finger_order == i) {
 // Found a match for ongoing movement
 finger_pos = finger_no;
@@ -799,7 +808,7 @@ break;
 }
 if (finger_pos < 0) {
 // This finger is not yet tracked, check the first zone it matches
-for (finger_no = 0; finger_no < MAX_GESTURE_FINGERS; finger_no++) {
+for (finger_no = 0; finger_no <= max_gesture_finger[gesture_no]; finger_no++) {
 if (gestures_step_count[gesture_no][finger_no] < 1) {
 // This finger definition has no steps, no more to check
 break;
@@ -843,6 +852,7 @@ break;
 }
 }
 spin_unlock_irqrestore(&gestures_lock, flags);
+}
 #endif
 
 		input_mt_slot(info->input_dev, id);
@@ -893,10 +903,11 @@ spin_unlock_irqrestore(&gestures_lock, flags);
 			touch_is_pressed++;
 	}
 
-	#ifdef CONFIG_TOUCHSCREEN_GESTURES
+#ifdef CONFIG_TOUCHSCREEN_GESTURES
+if (track_gestures) {
 // Check completed gestures or reset all progress if all fingers released
 spin_lock_irqsave(&gestures_lock, flags);
-for (gesture_no = 0; gesture_no < MAX_GESTURES; gesture_no++) {
+for (gesture_no = 0; gesture_no <= max_configured_gesture; gesture_no++) {
 if (gestures_detected[gesture_no])
 // Gesture already reported, skip
 continue;
@@ -905,7 +916,7 @@ if (gestures_step_count[gesture_no][0] < 1)
 continue; // Gesture not configured
 
 fingers_completed = true;
-for (finger_no = 0; finger_no < MAX_GESTURE_FINGERS; finger_no++) {
+for (finger_no = 0; finger_no <= max_gesture_finger[gesture_no]; finger_no++) {
 if (gestures_step_count[gesture_no][finger_no] > 0 &&
 gesture_fingers[gesture_no][finger_no].current_step <
 gestures_step_count[gesture_no][finger_no]) {
@@ -922,13 +933,14 @@ has_gestures = true;
 wake_up_interruptible_all(&gestures_wq);
 } else if (!touch_is_pressed) {
 // All fingers released, reset progress for all paths
-for (finger_no = 0; finger_no < MAX_GESTURE_FINGERS; finger_no++) {
+for (finger_no = 0; finger_no <= max_gesture_finger[gesture_no]; finger_no++) {
 gesture_fingers[gesture_no][finger_no].finger_order = -1;
 gesture_fingers[gesture_no][finger_no].current_step = -1;
 }
 }
 }
 spin_unlock_irqrestore(&gestures_lock, flags);
+}
 #endif
 	
 #if TOUCH_BOOSTER
@@ -3099,8 +3111,10 @@ static void reset_gestures_detection_locked(bool including_detected)
 {
 int gesture_no, finger_no;
 
-for (gesture_no = 0; gesture_no < MAX_GESTURES; gesture_no++) {
-if (gestures_detected[gesture_no] && !including_detected)
+	has_gestures = false;
+for (gesture_no = 0; gesture_no <= max_configured_gesture; gesture_no++) {
+if (gestures_detected[gesture_no] && !including_detected) {
+has_gestures = true;
 // Gesture already reported, skip
 continue;
 
@@ -3110,7 +3124,7 @@ if (gestures_step_count[gesture_no][0] < 1)
 continue; // Gesture not configured
 
 // Reset progress for all paths of this gesture
-for (finger_no = 0; finger_no < MAX_GESTURE_FINGERS; finger_no++) {
+for (finger_no = 0; finger_no <= max_gesture_finger[gesture_no]; finger_no++) {
 gesture_fingers[gesture_no][finger_no].finger_order = -1;
 gesture_fingers[gesture_no][finger_no].current_step = -1;
 }
@@ -3122,6 +3136,7 @@ static void reset_gestures_detection(bool including_detected)
 unsigned long flags;
 
 spin_lock_irqsave(&gestures_lock, flags);
+if (gestures_enabled)
 reset_gestures_detection_locked(including_detected);
 spin_unlock_irqrestore(&gestures_lock, flags);
 }
@@ -3143,11 +3158,11 @@ s += sprintf(s, "# finger_no : 1 to %d\n", MAX_GESTURE_FINGERS);
 s += sprintf(s, "# max steps per gesture and finger: %d\n\n", MAX_GESTURE_STEPS);
 
 // No special need for thread safety, at worst there might be incoherent definitions output
-for (gesture_no = 0; gesture_no < MAX_GESTURES; gesture_no++) {
+for (gesture_no = 0; gesture_no <= max_configured_gesture; gesture_no++) {
 if (gestures_step_count[gesture_no][0] < 1)
 continue; // Gesture not configured
 s += sprintf(s, "# Gesture %d:\n", gesture_no+1);
-for (finger_no = 0; finger_no < MAX_GESTURE_FINGERS; finger_no++) {
+for (finger_no = 0; finger_no <= max_gesture_finger[gesture_no]; finger_no++) {
 for (step = 0; step < gestures_step_count[gesture_no][finger_no]; step++) {
 point = &gesture_points[gesture_no][finger_no][step];
 s += sprintf(s, "%d:%d:(%d|%d,%d|%d)\n", gesture_no+1, finger_no+1,
@@ -3164,6 +3179,8 @@ struct device_attribute *attr,
 const char *buf, size_t size)
 {
 gesture_points_t *tmp_gesture_points;
+int highest_configured_gesture;
+int highest_gesture_finger[MAX_GESTURES];
 gestures_step_count_t *tmp_gestures_step_count;
 unsigned long flags;
 int res;
@@ -3179,6 +3196,7 @@ if (!tmp_gestures_step_count) {
 kfree(tmp_gesture_points);
 return -ENOMEM;
 }
+highest_configured_gesture = -1;
 for (gesture_no = 0; gesture_no < MAX_GESTURES; gesture_no++) {
 for (finger_no = 0; finger_no < MAX_GESTURE_FINGERS; finger_no++) {
 for (step = 0; step < MAX_GESTURE_STEPS; step++) {
@@ -3190,6 +3208,7 @@ point->max_y = 0;
 }
 (*tmp_gestures_step_count)[gesture_no][finger_no] = 0;
 }
+highest_gesture_finger[gesture_no] = -1;
 }
 
 for (;;) {
@@ -3226,12 +3245,16 @@ kfree(tmp_gesture_points);
 return -ENOMEM; // Too many gestures
 }
 gesture_no--;
+if (gesture_no > highest_configured_gesture)
+highest_configured_gesture = gesture_no;
 if (finger_no <= 0 || finger_no > MAX_GESTURE_FINGERS) {
 kfree(tmp_gestures_step_count);
 kfree(tmp_gesture_points);
 return -ENOMEM; // Too many fingers
 }
 finger_no--;
+if (finger_no > highest_gesture_finger[gesture_no])
+highest_gesture_finger[gesture_no] = finger_no;
 if ((*tmp_gestures_step_count)[gesture_no][finger_no] >= MAX_GESTURE_STEPS) {
 kfree(tmp_gestures_step_count);
 kfree(tmp_gesture_points);
@@ -3258,6 +3281,8 @@ spin_lock_irqsave(&gestures_lock, flags);
 reset_gestures_detection_locked(true);
 memcpy(&gesture_points, tmp_gesture_points, sizeof(*tmp_gesture_points));
 memcpy(&gestures_step_count, tmp_gestures_step_count, sizeof(*tmp_gestures_step_count));
+max_configured_gesture = highest_configured_gesture;
+memcpy(&max_gesture_finger, &(highest_gesture_finger[0]), sizeof(highest_gesture_finger));
 spin_unlock_irqrestore(&gestures_lock, flags);
 
 kfree(tmp_gestures_step_count);
@@ -3283,12 +3308,12 @@ return ret; // Interrupted
 
 s = buf;
 spin_lock_irqsave(&gestures_lock, flags);
-for (gesture_no = 0; gesture_no < MAX_GESTURES; gesture_no++) {
+for (gesture_no = 0; gesture_no <= max_configured_gesture; gesture_no++) {
 if (gestures_detected[gesture_no]) {
 detected_gesture = gesture_no;
 
 has_more_gestures = false;
-while (++gesture_no < MAX_GESTURES) {
+while (++gesture_no <= max_configured_gesture) {
 if (gestures_detected[gesture_no]) {
 has_more_gestures = true;
 break;
@@ -3299,7 +3324,7 @@ break;
 has_gestures = has_more_gestures;
 
 // Reset detection of this gesture
-for (finger_no = 0; finger_no < MAX_GESTURE_FINGERS; finger_no++) {
+for (finger_no = 0; finger_no <= max_gesture_finger[detected_gesture]; finger_no++) {
 gesture_fingers[detected_gesture][finger_no].finger_order = -1;
 gesture_fingers[detected_gesture][finger_no].current_step = -1;
 }
@@ -3311,6 +3336,7 @@ s += sprintf(buf, "%d", detected_gesture + 1);
 return s - buf;
 }
 }
+has_gestures = false;
 spin_unlock_irqrestore(&gestures_lock, flags);
 
 // Despite waking up, no gestures were detected
@@ -3332,14 +3358,49 @@ return -EINVAL;
 }
 }
 
+static ssize_t gestures_enabled_show(struct device *dev,
+                                     struct device_attribute *attr, char *buf)
+{
+sprintf(buf, "%d\n", gestures_enabled ? 1 : 0);
+return strlen(buf);
+}
+
+static ssize_t gestures_enabled_store(struct device *dev,
+                                      struct device_attribute *attr,
+                                      const char *buf,
+                                      size_t size)
+{
+unsigned int data = -1;
+
+if (!strncmp(buf, "on", 2)) {
+data = 1;
+} else if (!strncmp(buf, "off", 3)) {
+data = 0;
+} else if (sscanf(buf, "%u\n", &data) != 1) {
+return -EINVAL;
+}
+
+if (data < 0 || data > 1)
+return -EINVAL;
+
+if (data == 0)
+reset_gestures_detection(true);
+gestures_enabled = (data == 1);
+
+        return size;
+}
+
 static DEVICE_ATTR(gesture_patterns, S_IRUGO | S_IWUSR,
                    gesture_patterns_show, gesture_patterns_store);
 static DEVICE_ATTR(wait_for_gesture, S_IRUGO | S_IWUSR,
                    wait_for_gesture_show, wait_for_gesture_store);
+static DEVICE_ATTR(gestures_enabled, S_IRUGO | S_IWUSR,
+		gestures_enabled_show, gestures_enabled_store);
 
 static struct attribute *gestures_attrs[] = {
 &dev_attr_gesture_patterns.attr,
 &dev_attr_wait_for_gesture.attr,
+&dev_attr_gestures_enabled.attr,
 NULL
 };
 
