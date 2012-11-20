@@ -1154,6 +1154,7 @@ static int check_up(void)
 	int up_freq, up_rq;
 	int min_freq = INT_MAX;
 	int min_rq_avg = INT_MAX;
+	int avg_freq = 0, avg_rq = 0;
 	int online;
 	int hotplug_lock = atomic_read(&g_hotplug_lock);
 
@@ -1215,6 +1216,7 @@ static int check_down(void)
 	int down_freq, down_rq;
 	int max_freq = 0;
 	int max_rq_avg = 0;
+	int avg_freq = 0, avg_rq = 0;
 	int online;
 	int hotplug_lock = atomic_read(&g_hotplug_lock);
 
