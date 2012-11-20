@@ -3105,18 +3105,20 @@ static ssize_t show_intensity_logging_off(struct device *dev,
 
 #endif
 
+
 #ifdef CONFIG_TOUCHSCREEN_GESTURES
 // Must be called with the gestures_lock spinlock held
 static void reset_gestures_detection_locked(bool including_detected)
 {
 int gesture_no, finger_no;
 
-	has_gestures = false;
+has_gestures = false;
 for (gesture_no = 0; gesture_no <= max_configured_gesture; gesture_no++) {
 if (gestures_detected[gesture_no] && !including_detected) {
 has_gestures = true;
 // Gesture already reported, skip
 continue;
+}
 
 gestures_detected[gesture_no] = false;
 
@@ -3179,9 +3181,9 @@ struct device_attribute *attr,
 const char *buf, size_t size)
 {
 gesture_points_t *tmp_gesture_points;
+gestures_step_count_t *tmp_gestures_step_count;
 int highest_configured_gesture;
 int highest_gesture_finger[MAX_GESTURES];
-gestures_step_count_t *tmp_gestures_step_count;
 unsigned long flags;
 int res;
 int gesture_no, finger_no, min_x, max_x, min_y, max_y;
