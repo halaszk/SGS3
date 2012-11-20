@@ -632,18 +632,15 @@ void dhd_enable_packet_filter(int value, dhd_pub_t *dhd)
 }
 #endif /* PKT_FILTER_SUPPORT */
 
-bool wifi_pm = false;
-module_param(wifi_pm, bool, 0755);
-int power_mode;
+#ifdef CONFIG_BCMDHD_WIFI_PM
+static int wifi_pm = 0;
+
+module_param(wifi_pm, int, 0755);
+#endif
+int power_mode = PM_MAX;
 static int dhd_set_suspend(int value, dhd_pub_t *dhd)
 {
-#ifndef SUPPORT_PM2_ONLY
-	if (wifi_pm)
-	power_mode = PM_MAX;
-	else
-	power_mode = PM_OFF;
-	
-#endif
+
 	/* wl_pkt_filter_enable_t	enable_parm; */
 	char iovbuf[32];
 #if !defined(CUSTOMER_HW4)
@@ -661,6 +658,10 @@ static int dhd_set_suspend(int value, dhd_pub_t *dhd)
 
 	DHD_TRACE(("%s: enter, value = %d in_suspend=%d\n",
 		__FUNCTION__, value, dhd->in_suspend));
+#ifdef CONFIG_BCMDHD_WIFI_PM
+if (wifi_pm == 1)
+power_mode = PM_FAST;
+#endif
 
 	dhd_suspend_lock(dhd);
 	if (dhd && dhd->up) {
@@ -3608,10 +3609,10 @@ dhd_preinit_ioctls(dhd_pub_t *dhd)
 #endif /* PROP_TXSTATUS */
 	DHD_TRACE(("Enter %s\n", __FUNCTION__));
 	dhd->op_mode = 0;
-		if (wifi_pm)
-	power_mode = PM_MAX;
-	else
-	power_mode = PM_OFF;
+#ifdef CONFIG_BCMDHD_WIFI_PM
+if (wifi_pm == 1)
+power_mode = PM_FAST;
+#endif
 #ifdef GET_CUSTOM_MAC_ENABLE
 	ret = dhd_custom_get_mac_address(ea_addr.octet);
 	if (!ret) {
