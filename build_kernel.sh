@@ -31,7 +31,7 @@ fi;
 . $KERNELDIR/.config
 
 cd $KERNELDIR/
-nice -n 10 make -j4 || exit 1
+nice -n 10 make -j2 || exit 1
 
 # remove previous zImage files
 if [ -e $KERNELDIR/zImage ]; then
@@ -89,6 +89,7 @@ find -name '*.ko' -exec cp -av {} $INITRAMFS_TMP/lib/modules/ \;
 ${CROSS_COMPILE}strip --strip-debug $INITRAMFS_TMP/lib/modules/*.ko
 chmod 755 $INITRAMFS_TMP/lib/modules/*
 mv -f drivers/media/video/samsung/mali_r3p0_lsi/mali.ko drivers/media/video/samsung/mali_r3p0_lsi/mali_r3p0_lsi.ko
+mv -f drivers/net/wireless/bcmdhd.cm/dhd.ko drivers/net/wireless/bcmdhd.cm/dhd_cm.ko
 find -name '*.ko' -exec cp -av {} $INITRAMFS_TMP/lib/modules/ \;
 ${CROSS_COMPILE}strip --strip-unneeded $INITRAMFS_TMP/lib/modules/*
 cd $INITRAMFS_TMP
