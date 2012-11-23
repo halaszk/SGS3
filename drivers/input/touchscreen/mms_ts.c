@@ -448,7 +448,12 @@ static void set_dvfs_off(struct work_struct *work)
 	pr_debug("[TSP] DVFS Off!");
 	mutex_unlock(&info->dvfs_lock);
 	}
-int touch_boost_level = 10;
+#if TOUCH_BOOSTER
+	static int touch_boost_level = 10;
+	module_param(touch_boost_level, int, 0755);
+	EXPORT_SYMBOL(touch_boost_level);
+#endif
+
 static void set_dvfs_lock(struct mms_ts_info *info, uint32_t on)
 {
 	int ret;
