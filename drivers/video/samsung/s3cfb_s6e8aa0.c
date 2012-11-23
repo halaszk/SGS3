@@ -287,114 +287,6 @@ read_retry:
 int min_gamma = 0, max_gamma = GAMMA_MAX - 1, min_bl = 40;
 static int get_backlight_level_from_brightness(int brightness)
 {
-/*	int backlightlevel;
-
-
-	switch (brightness) {
-	case 0 ... 29:
-		backlightlevel = GAMMA_20CD;
-		break;
-	case 30 ... 39:
-		backlightlevel = GAMMA_30CD;
-		break;
-	case 40 ... 49:
-		backlightlevel = GAMMA_40CD;
-		break;
-	case 50 ... 59:
-		backlightlevel = GAMMA_50CD;
-		break;
-	case 60 ... 69:
-		backlightlevel = GAMMA_60CD;
-		break;
-	case 70 ... 79:
-		backlightlevel = GAMMA_70CD;
-		break;
-	case 80 ... 89:
-		backlightlevel = GAMMA_80CD;
-		break;
-	case 90 ... 99:
-		backlightlevel = GAMMA_90CD;
-		break;
-	case 100 ... 101:
-		backlightlevel = GAMMA_100CD;
-		break;
-	case 102 ... 103:
-		backlightlevel = GAMMA_102CD;
-		break;
-	case 104 ... 105:
-		backlightlevel = GAMMA_104CD;
-		break;
-	case 106 ... 107:
-		backlightlevel = GAMMA_106CD;
-		break;
-	case 108 ... 109:
-		backlightlevel = GAMMA_108CD;
-		break;
-	case 110 ... 119:
-		backlightlevel = GAMMA_110CD;
-		break;
-	case 120 ... 129:
-		backlightlevel = GAMMA_120CD;
-		break;
-	case 130 ... 139:
-		backlightlevel = GAMMA_130CD;
-		break;
-	case 140 ... 149:
-		backlightlevel = GAMMA_140CD;
-		break;
-	case 150 ... 159:
-		backlightlevel = GAMMA_150CD;
-		break;
-	case 160 ... 169:
-		backlightlevel = GAMMA_160CD;
-		break;
-	case 170 ... 179:
-		backlightlevel = GAMMA_170CD;
-		break;
-	case 180 ... 181:
-		backlightlevel = GAMMA_180CD;
-		break;
-	case 182 ... 183:
-		backlightlevel = GAMMA_182CD;
-		break;
-	case 184 ... 185:
-		backlightlevel = GAMMA_184CD;
-		break;
-	case 186 ... 187:
-		backlightlevel = GAMMA_186CD;
-		break;
-	case 188 ... 189:
-		backlightlevel = GAMMA_188CD;
-		break;
-	case 190 ... 199:
-		backlightlevel = GAMMA_190CD;
-		break;
-	case 200 ... 209:
-		backlightlevel = GAMMA_200CD;
-		break;
-	case 210 ... 219:
-		backlightlevel = GAMMA_210CD;
-		break;
-	case 220 ... 229:
-		backlightlevel = GAMMA_220CD;
-		break;
-	case 230 ... 239:
-		backlightlevel = GAMMA_230CD;
-		break;
-	case 240 ... 249:
-		backlightlevel = GAMMA_240CD;
-		break;
-	case 250 ... 254:
-		backlightlevel = GAMMA_250CD;
-		break;
-	case 255:
-		backlightlevel = GAMMA_300CD;
-		break;
-	default:
-		backlightlevel = DEFAULT_GAMMA_LEVEL;
-		break;
-	}
-	return backlightlevel;*/
 	int gamma_value =0;
 	int gamma_val_x10 =0;
 
@@ -432,29 +324,7 @@ exit:
 	return 0;
 }
 #endif
-//#else
-//static int get_backlight_level_from_brightness(int brightness)
-//{
-//	int backlightlevel;
 
-	/* brightness setting from platform is from 0 to 255
-	 * But in this driver, brightness is only supported from 0 to 24 */
-
-/*	switch (brightness) {
-	case 0 ... 29:
-		backlightlevel = GAMMA_30CD;
-		break;
-	case 30 ... 254:
-		backlightlevel = (brightness - candela_table[0]) / 10;
-		break;
-	case 255:
-		backlightlevel = ARRAY_SIZE(candela_table) - 1;
-		break;
-	default:
-		backlightlevel = DEFAULT_GAMMA_LEVEL;
-		break;
-	}
-	return backlightlevel;*/
 #define declare_show(filename) \
 	static ssize_t show_##filename(struct device *dev, struct device_attribute *attr, char *buf)
 
@@ -503,7 +373,7 @@ declare_store(min_bl) {
 	}
 	return size;
 }
-//#endif
+
 
 #define declare_attr_rw(filename, perm) \
 	static DEVICE_ATTR(filename, perm, show_##filename, store_##filename)
