@@ -634,13 +634,16 @@ void dhd_enable_packet_filter(int value, dhd_pub_t *dhd)
 
 #ifdef CONFIG_BCMDHD_WIFI_PM
 static int wifi_pm = 0;
-
+/* /sys/module/dhd/parameters/wifi_pm */
 module_param(wifi_pm, int, 0755);
+EXPORT_SYMBOL(wifi_pm);
 #endif
-int power_mode = PM_MAX;
+
 static int dhd_set_suspend(int value, dhd_pub_t *dhd)
 {
-
+#ifdef CONFIG_BCMDHD_WIFI_PM
+int power_mode;
+#endif
 	/* wl_pkt_filter_enable_t	enable_parm; */
 	char iovbuf[32];
 #if !defined(CUSTOMER_HW4)
@@ -659,8 +662,17 @@ static int dhd_set_suspend(int value, dhd_pub_t *dhd)
 	DHD_TRACE(("%s: enter, value = %d in_suspend=%d\n",
 		__FUNCTION__, value, dhd->in_suspend));
 #ifdef CONFIG_BCMDHD_WIFI_PM
-if (wifi_pm == 1)
+	if (wifi_pm == 1) {
 power_mode = PM_FAST;
+pr_info("[halaszk] %p Wi-Fi Power Management policy changed to PM_FAST.", __func__);
+} else {
+power_mode = PM_MAX;
+pr_info("[halaszk] %p Wi-Fi Power Management policy changed to PM_MAX.", __func__);
+}
+#else
+#ifndef SUPPORT_PM2_ONLY
+int power_mode = PM_MAX;
+#endif
 #endif
 
 	dhd_suspend_lock(dhd);
@@ -672,9 +684,14 @@ power_mode = PM_FAST;
 				/* Kernel suspended */
 				DHD_ERROR(("%s: force extra Suspend setting \n", __FUNCTION__));
 
+#ifdef CONFIG_BCMDHD_WIFI_PM
+dhd_wl_ioctl_cmd(dhd, WLC_SET_PM, (char *)&power_mode,
+sizeof(power_mode), TRUE, 0);
+#else
 #ifndef SUPPORT_PM2_ONLY
-				dhd_wl_ioctl_cmd(dhd, WLC_SET_PM, (char *)&power_mode,
-				                 sizeof(power_mode), TRUE, 0);
+dhd_wl_ioctl_cmd(dhd, WLC_SET_PM, (char *)&power_mode,
+sizeof(power_mode), TRUE, 0);
+#endif
 #endif
 #ifdef PKT_FILTER_SUPPORT
 				/* Enable packet filter, only allow unicast packet to send up */
@@ -718,10 +735,14 @@ power_mode = PM_FAST;
 				/* Kernel resumed  */
 				DHD_TRACE(("%s: Remove extra suspend setting \n", __FUNCTION__));
 
+CONFIG_BCMDHD_WIFI_PM
+dhd_wl_ioctl_cmd(dhd, WLC_SET_PM, (char *)&power_mode,
+sizeof(power_mode), TRUE, 0);
+#else
 #ifndef SUPPORT_PM2_ONLY
-				power_mode = PM_FAST;
-				dhd_wl_ioctl_cmd(dhd, WLC_SET_PM, (char *)&power_mode,
-				                 sizeof(power_mode), TRUE, 0);
+dhd_wl_ioctl_cmd(dhd, WLC_SET_PM, (char *)&power_mode,
+sizeof(power_mode), TRUE, 0);
+#endif
 #endif
 #ifdef PKT_FILTER_SUPPORT
 				/* disable pkt filter */
@@ -3609,10 +3630,6 @@ dhd_preinit_ioctls(dhd_pub_t *dhd)
 #endif /* PROP_TXSTATUS */
 	DHD_TRACE(("Enter %s\n", __FUNCTION__));
 	dhd->op_mode = 0;
-#ifdef CONFIG_BCMDHD_WIFI_PM
-if (wifi_pm == 1)
-power_mode = PM_FAST;
-#endif
 #ifdef GET_CUSTOM_MAC_ENABLE
 	ret = dhd_custom_get_mac_address(ea_addr.octet);
 	if (!ret) {
