@@ -632,12 +632,10 @@ void dhd_enable_packet_filter(int value, dhd_pub_t *dhd)
 }
 #endif /* PKT_FILTER_SUPPORT */
 
-#ifdef CONFIG_BCMDHD_WIFI_PM
 static int wifi_pm = 0;
 /* /sys/module/dhd/parameters/wifi_pm */
 module_param(wifi_pm, int, 0755);
-EXPORT_SYMBOL(wifi_pm);
-#endif
+//EXPORT_SYMBOL(wifi_pm);
 
 static int dhd_set_suspend(int value, dhd_pub_t *dhd)
 {
