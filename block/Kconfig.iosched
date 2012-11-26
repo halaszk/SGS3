@@ -66,11 +66,11 @@ config CGROUP_BFQIO
 	  bfqio.
 
 config IOSCHED_ZEN
-tristate "Zen I/O scheduler"
-default y
----help---
-FCFS, dispatches are back-inserted, deadlines ensure fairness.
-Should work best with devices where there is no travel delay.
+	tristate "Zen I/O scheduler"
+	default y
+	---help---
+	FCFS, dispatches are back-inserted, deadlines ensure fairness.
+	Should work best with devices where there is no travel delay.
 
 config IOSCHED_SIO
 	tristate "Simple I/O scheduler"
