@@ -101,7 +101,9 @@ struct cpufreq_policy {
 	struct cpufreq_cpuinfo	cpuinfo;/* see above */
 
 	unsigned int		min;    /* in kHz */
+	unsigned int            min_suspend; 
 	unsigned int		max;    /* in kHz */
+	unsigned int            max_suspend;    /* in kHz */
 	unsigned int		cur;    /* in kHz, only needed if cpufreq
 					 * governors are used */
 	unsigned int		policy; /* see above */
