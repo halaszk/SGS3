@@ -32,17 +32,17 @@
 #include <linux/err.h>
 #include <linux/slab.h>
 
-/* greater than 95% avg load across online CPUs increases frequency */
+/* greater than 80% avg load across online CPUs increases frequency */
 #define DEFAULT_UP_FREQ_MIN_LOAD			(95)
 
 /* Keep 10% of idle under the up threshold when decreasing the frequency */
-#define DEFAULT_FREQ_DOWN_DIFFERENTIAL			(1)
+#define DEFAULT_FREQ_DOWN_DIFFERENTIAL			(2)
 
-/* less than 40% avg load across online CPUs decreases frequency */
-#define DEFAULT_DOWN_FREQ_MAX_LOAD			(40)
+/* less than 20% avg load across online CPUs decreases frequency */
+#define DEFAULT_DOWN_FREQ_MAX_LOAD			(20)
 
 /* default sampling period (uSec) is bogus; 10x ondemand's default for x86 */
-#define DEFAULT_SAMPLING_PERIOD				(50000)
+#define DEFAULT_SAMPLING_PERIOD				(100000)
 
 /* default number of sampling periods to average before hotplug-in decision */
 #define DEFAULT_HOTPLUG_IN_SAMPLING_PERIODS		(5)
@@ -378,7 +378,7 @@ static ssize_t store_ignore_nice_load(struct kobject *a, struct attribute *b,
 		dbs_info->prev_cpu_idle = get_cpu_idle_time(j,
 						&dbs_info->prev_cpu_wall);
 		if (dbs_tuners_ins.ignore_nice)
-			dbs_info->prev_cpu_nice = kcpustat_cpu(j).cpustat[CPUTIME_NICE];
+			dbs_info->prev_cpu_nice = kstat_cpu(j).cpustat.nice;
 
 	}
 	mutex_unlock(&dbs_mutex);
@@ -673,9 +673,10 @@ static int cpufreq_governor_dbs(struct cpufreq_policy *policy,
 
 			j_dbs_info->prev_cpu_idle = get_cpu_idle_time(j,
 						&j_dbs_info->prev_cpu_wall);
-			if (dbs_tuners_ins.ignore_nice)
+			if (dbs_tuners_ins.ignore_nice) {
 				j_dbs_info->prev_cpu_nice =
-					kcpustat_cpu(j).cpustat[CPUTIME_NICE];
+						kstat_cpu(j).cpustat.nice;
+			}
 
 			max_periods = max(DEFAULT_HOTPLUG_IN_SAMPLING_PERIODS,
 					DEFAULT_HOTPLUG_OUT_SAMPLING_PERIODS);
