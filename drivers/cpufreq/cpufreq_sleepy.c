@@ -35,12 +35,12 @@
  * It helps to keep variable names smaller, simpler
  */
 
-#define DEF_FREQUENCY_DOWN_DIFFERENTIAL         (20)
+#define DEF_FREQUENCY_DOWN_DIFFERENTIAL         (10)
 #define DEF_FREQUENCY_UP_THRESHOLD              (90)
 #define DEF_SAMPLING_DOWN_FACTOR                (1)
 #define MAX_SAMPLING_DOWN_FACTOR                (100000)
 #define MICRO_FREQUENCY_DOWN_DIFFERENTIAL       (3)
-#define MICRO_FREQUENCY_UP_THRESHOLD            (80)
+#define MICRO_FREQUENCY_UP_THRESHOLD            (85)
 #define MICRO_FREQUENCY_MIN_SAMPLE_RATE         (10000)
 #define MIN_FREQUENCY_UP_THRESHOLD              (11)
 #define MAX_FREQUENCY_UP_THRESHOLD              (100)
@@ -192,20 +192,20 @@ static struct early_suspend sleepy_power_suspend = {
 static inline u64 get_cpu_idle_time_jiffy(unsigned int cpu, u64 *wall)
 {
         u64 idle_time;
-        u64 cur_wall_time;
+        cputime64_t cur_wall_time;
         u64 busy_time;
 
         cur_wall_time = jiffies64_to_cputime64(get_jiffies_64());
+        busy_time = kcpustat_cpu(cpu).cpustat[CPUTIME_USER] +
+                        kcpustat_cpu(cpu).cpustat[CPUTIME_SYSTEM];
 
-	busy_time  = kcpustat_cpu(cpu).cpustat[CPUTIME_USER];
-	busy_time += kcpustat_cpu(cpu).cpustat[CPUTIME_SYSTEM];
         busy_time += kcpustat_cpu(cpu).cpustat[CPUTIME_IRQ];
         busy_time += kcpustat_cpu(cpu).cpustat[CPUTIME_SOFTIRQ];
         busy_time += kcpustat_cpu(cpu).cpustat[CPUTIME_STEAL];
         busy_time += kcpustat_cpu(cpu).cpustat[CPUTIME_NICE];
 
-	idle_time = cur_wall_time - busy_time;
-	if (wall)
+        idle_time = cputime64_sub(cur_wall_time, busy_time);
+        if (wall)
                 *wall = jiffies_to_usecs(cur_wall_time);
 
         return jiffies_to_usecs(idle_time);

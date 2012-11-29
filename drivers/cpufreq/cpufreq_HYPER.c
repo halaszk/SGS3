@@ -24,7 +24,7 @@
 #include <linux/tick.h>
 #include <linux/ktime.h>
 #include <linux/sched.h>
-#include <linux/pm_qos.h>
+#include <linux/pm_qos_params.h>
 #include <linux/input.h>
 #include <linux/workqueue.h>
 #include <linux/slab.h>
@@ -34,18 +34,18 @@
  * It helps to keep variable names smaller, simpler
  */
 
-#define DEF_FREQUENCY_DOWN_DIFFERENTIAL         (20)
+#define DEF_FREQUENCY_DOWN_DIFFERENTIAL         (10)
 #define MIN_FREQUENCY_DOWN_DIFFERENTIAL		(1)
-#define DEF_FREQUENCY_UP_THRESHOLD              (80)
+#define DEF_FREQUENCY_UP_THRESHOLD              (85)
 #define DEF_SAMPLING_DOWN_FACTOR                (1)
 #define MAX_SAMPLING_DOWN_FACTOR                (100000)
 #define MICRO_FREQUENCY_DOWN_DIFFERENTIAL       (5)
-#define MICRO_FREQUENCY_UP_THRESHOLD            (70)
+#define MICRO_FREQUENCY_UP_THRESHOLD            (90)
 #define MICRO_FREQUENCY_MIN_SAMPLE_RATE         (10000)
 #define MIN_FREQUENCY_UP_THRESHOLD              (11)
 #define MAX_FREQUENCY_UP_THRESHOLD              (100)
-#define FREQ_STEP                               (40)
-#define UP_THRESHOLD_AT_MIN_FREQ                (80)
+#define FREQ_STEP                               (30)
+#define UP_THRESHOLD_AT_MIN_FREQ                (60)
 #define FREQ_FOR_RESPONSIVENESS                 (200000)
 
 /*
@@ -140,24 +140,24 @@ static struct dbs_tuners {
 	.freq_responsiveness = FREQ_FOR_RESPONSIVENESS
 };
 
-static unsigned int dbs_enable = 0;	/* number of CPUs using this policy */
+static unsigned int dbs_enable=0;	/* number of CPUs using this policy */
 
 static inline u64 get_cpu_idle_time_jiffy(unsigned int cpu, u64 *wall)
 {
 	u64 idle_time;
-	u64 cur_wall_time;
+	cputime64_t cur_wall_time;
 	u64 busy_time;
 
 	cur_wall_time = jiffies64_to_cputime64(get_jiffies_64());
+	busy_time = kcpustat_cpu(cpu).cpustat[CPUTIME_USER] +
+		    kcpustat_cpu(cpu).cpustat[CPUTIME_SYSTEM];
 
-	busy_time  = kcpustat_cpu(cpu).cpustat[CPUTIME_USER];
-	busy_time += kcpustat_cpu(cpu).cpustat[CPUTIME_SYSTEM];
 	busy_time += kcpustat_cpu(cpu).cpustat[CPUTIME_IRQ];
 	busy_time += kcpustat_cpu(cpu).cpustat[CPUTIME_SOFTIRQ];
 	busy_time += kcpustat_cpu(cpu).cpustat[CPUTIME_STEAL];
 	busy_time += kcpustat_cpu(cpu).cpustat[CPUTIME_NICE];
 
-	idle_time = cur_wall_time - busy_time;
+	idle_time = cputime64_sub(cur_wall_time, busy_time);
 	if (wall)
 		*wall = jiffies_to_usecs(cur_wall_time);
 
@@ -1006,7 +1006,7 @@ static int __init cpufreq_gov_dbs_init(void)
 	} else {
 		/* For correct statistics, we need 10 ticks for each measure */
 		min_sampling_rate =
-			MIN_SAMPLING_RATE_RATIO * jiffies_to_usecs(10);
+			MIN_SAMPLING_RATE_RATIO * jiffies_to_usecs(1);
 	}
 
 	err = pm_qos_add_notifier(PM_QOS_DVFS_RESPONSE_LATENCY,
