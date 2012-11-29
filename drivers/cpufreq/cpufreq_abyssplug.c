@@ -32,14 +32,14 @@
 #include <linux/err.h>
 #include <linux/slab.h>
 
-/* greater than 80% avg load across online CPUs increases frequency */
-#define DEFAULT_UP_FREQ_MIN_LOAD			(95)
+/* greater than 95% avg load across online CPUs increases frequency */
+#define DEFAULT_UP_FREQ_MIN_LOAD			(90)
 
 /* Keep 10% of idle under the up threshold when decreasing the frequency */
-#define DEFAULT_FREQ_DOWN_DIFFERENTIAL			(2)
+#define DEFAULT_FREQ_DOWN_DIFFERENTIAL			(1)
 
 /* less than 20% avg load across online CPUs decreases frequency */
-#define DEFAULT_DOWN_FREQ_MAX_LOAD			(20)
+#define DEFAULT_DOWN_FREQ_MAX_LOAD			(40)
 
 /* default sampling period (uSec) is bogus; 10x ondemand's default for x86 */
 #define DEFAULT_SAMPLING_PERIOD				(100000)
@@ -49,6 +49,8 @@
 
 /* default number of sampling periods to average before hotplug-out decision */
 #define DEFAULT_HOTPLUG_OUT_SAMPLING_PERIODS		(20)
+
+#define DEF_MAX_CPU_LOCK			(0)
 
 static void do_dbs_timer(struct work_struct *work);
 static int cpufreq_governor_dbs(struct cpufreq_policy *policy,
@@ -106,6 +108,7 @@ static struct dbs_tuners {
 	unsigned int ignore_nice;
 	unsigned int io_is_busy;
 	unsigned int boost_timeout;
+	unsigned int max_cpu_lock;
 } dbs_tuners_ins = {
 	.sampling_rate =		DEFAULT_SAMPLING_PERIOD,
 	.up_threshold =			DEFAULT_UP_FREQ_MIN_LOAD,
@@ -113,6 +116,7 @@ static struct dbs_tuners {
 	.down_threshold =		DEFAULT_DOWN_FREQ_MAX_LOAD,
 	.hotplug_in_sampling_periods =	DEFAULT_HOTPLUG_IN_SAMPLING_PERIODS,
 	.hotplug_out_sampling_periods =	DEFAULT_HOTPLUG_OUT_SAMPLING_PERIODS,
+	.max_cpu_lock = DEF_MAX_CPU_LOCK,
 	.hotplug_load_index =		0,
 	.ignore_nice =			0,
 	.io_is_busy =			0,
@@ -165,6 +169,19 @@ show_one(hotplug_out_sampling_periods, hotplug_out_sampling_periods);
 show_one(ignore_nice_load, ignore_nice);
 show_one(io_is_busy, io_is_busy);
 show_one(boost_timeout, boost_timeout);
+show_one(max_cpu_lock, max_cpu_lock);
+
+static ssize_t store_max_cpu_lock(struct kobject *a, struct attribute *b,
+				  const char *buf, size_t count)
+{
+	unsigned int input;
+	int ret;
+	ret = sscanf(buf, "%u", &input);
+	if (ret != 1)
+		return -EINVAL;
+	dbs_tuners_ins.max_cpu_lock = min(input, num_possible_cpus());
+	return count;
+}
 
 static ssize_t store_boost_timeout(struct kobject *a, struct attribute *b,
 				   const char *buf, size_t count)
@@ -412,6 +429,7 @@ define_one_global_rw(hotplug_out_sampling_periods);
 define_one_global_rw(ignore_nice_load);
 define_one_global_rw(io_is_busy);
 define_one_global_rw(boost_timeout);
+define_one_global_rw(max_cpu_lock);
 
 static struct attribute *dbs_attributes[] = {
 	&sampling_rate.attr,
@@ -423,6 +441,7 @@ static struct attribute *dbs_attributes[] = {
 	&ignore_nice_load.attr,
 	&io_is_busy.attr,
 	&boost_timeout.attr,
+	&max_cpu_lock.attr,
 	NULL
 };
 
@@ -541,7 +560,7 @@ static void dbs_check_cpu(struct cpu_dbs_info_s *this_dbs_info)
 	/* check if auxiliary CPU is needed based on avg_load */
 	if (avg_load > dbs_tuners_ins.up_threshold) {
 		/* should we enable auxillary CPUs? */
-		if (num_online_cpus() < 2 && hotplug_in_avg_load >
+		if (num_online_cpus() < 4 && hotplug_in_avg_load >
 				dbs_tuners_ins.up_threshold) {
 			queue_work_on(this_dbs_info->cpu, khotplug_wq,
 					&this_dbs_info->cpu_up_work);
@@ -598,12 +617,22 @@ out:
 
 static void do_cpu_up(struct work_struct *work)
 {
+if (dbs_tuners_ins.max_cpu_lock == 3)
 	cpu_up(1);
+	else
+if (dbs_tuners_ins.max_cpu_lock == 1)
+return;
+else
+if (dbs_tuners_ins.max_cpu_lock == 0){
+	int i = num_online_cpus();
+	if( i < 4 && !cpu_online(i) ) cpu_up(i);
+	}
 }
 
 static void do_cpu_down(struct work_struct *work)
 {
-	cpu_down(1);
+	int i = num_online_cpus() - 1;
+	if( i > 0 && cpu_online(i) ) cpu_down(i);
 }
 
 static void do_dbs_timer(struct work_struct *work)
@@ -621,7 +650,7 @@ static void do_dbs_timer(struct work_struct *work)
 	} else {
 		delay = usecs_to_jiffies(dbs_tuners_ins.boost_timeout);
 		dbs_info->boost_applied = 0;
-		if (num_online_cpus() < 2)
+		if (num_online_cpus() < 4)
 			queue_work_on(cpu, khotplug_wq,
 						&dbs_info->cpu_up_work);
 	}

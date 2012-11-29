@@ -1,5 +1,5 @@
 /*
- *  drivers/cpufreq/cpufreq_HYPER.c
+ *  drivers/cpufreq/cpufreq_hyper.c
  *
  *  Copyright (C)  2001 Russell King
  *            (C)  2003 Venkatesh Pallipadi <venkatesh.pallipadi@intel.com>.
@@ -24,29 +24,40 @@
 #include <linux/tick.h>
 #include <linux/ktime.h>
 #include <linux/sched.h>
-#include <linux/pm_qos_params.h>
+
 #include <linux/input.h>
 #include <linux/workqueue.h>
 #include <linux/slab.h>
+
+#ifdef CONFIG_HAS_EARLYSUSPEND
+#include <linux/earlysuspend.h>
+#endif
 
 /*
  * dbs is used in this file as a shortform for demandbased switching
  * It helps to keep variable names smaller, simpler
  */
 
-#define DEF_FREQUENCY_DOWN_DIFFERENTIAL         (10)
+#define DEF_FREQUENCY_DOWN_DIFFERENTIAL         (20)
 #define MIN_FREQUENCY_DOWN_DIFFERENTIAL		(1)
-#define DEF_FREQUENCY_UP_THRESHOLD              (85)
-#define DEF_SAMPLING_DOWN_FACTOR                (1)
+#define DEF_FREQUENCY_UP_THRESHOLD              (60)
+#define DEF_SAMPLING_DOWN_FACTOR                (2)
 #define MAX_SAMPLING_DOWN_FACTOR                (100000)
-#define MICRO_FREQUENCY_DOWN_DIFFERENTIAL       (5)
-#define MICRO_FREQUENCY_UP_THRESHOLD            (90)
+#define MICRO_FREQUENCY_DOWN_DIFFERENTIAL       (1)
+#define MICRO_FREQUENCY_UP_THRESHOLD            (60)
 #define MICRO_FREQUENCY_MIN_SAMPLE_RATE         (10000)
-#define MIN_FREQUENCY_UP_THRESHOLD              (11)
+#define MIN_FREQUENCY_UP_THRESHOLD              (10)
 #define MAX_FREQUENCY_UP_THRESHOLD              (100)
-#define FREQ_STEP                               (30)
-#define UP_THRESHOLD_AT_MIN_FREQ                (60)
-#define FREQ_FOR_RESPONSIVENESS                 (200000)
+#define FREQ_STEP                               (40)
+#define UP_THRESHOLD_AT_MIN_FREQ                (40)
+#define FREQ_FOR_RESPONSIVENESS                 (800000)
+
+#ifdef CONFIG_HAS_EARLYSUSPEND
+#define DEF_SUSPEND_FREQ			(700000)
+#define FREQ_STEP_SUSPEND                       (40)
+#define SAMPLING_FACTOR_SUSPEND			(3)
+#define DEF_FREQUENCY_UP_THRESHOLD_SUSPEND	(95)
+#endif
 
 /*
  * The polling frequency of this governor depends on the capability of
@@ -58,7 +69,7 @@
  * this governor will not work.
  * All times here are in uS.
  */
-#define MIN_SAMPLING_RATE_RATIO			(2)
+#define MIN_SAMPLING_RATE_RATIO			(1)
 
 static unsigned int min_sampling_rate;
 
@@ -73,7 +84,7 @@ static int cpufreq_governor_dbs(struct cpufreq_policy *policy,
 #ifndef CONFIG_CPU_FREQ_DEFAULT_GOV_HYPER
 static
 #endif
-struct cpufreq_governor cpufreq_gov_HYPER = {
+struct cpufreq_governor cpufreq_gov_hyper = {
        .name                   = "HYPER",
        .governor               = cpufreq_governor_dbs,
        .max_transition_latency = TRANSITION_LATENCY_LIMIT,
@@ -87,7 +98,6 @@ struct cpu_dbs_info_s {
 	cputime64_t prev_cpu_idle;
 	cputime64_t prev_cpu_iowait;
 	cputime64_t prev_cpu_wall;
-	unsigned int prev_cpu_wall_delta;
 	cputime64_t prev_cpu_nice;
 	struct cpufreq_policy *cur_policy;
 	struct delayed_work work;
@@ -104,7 +114,6 @@ struct cpu_dbs_info_s {
 	 * when user is changing the governor or limits.
 	 */
 	struct mutex timer_mutex;
-	bool activated; /* dbs_timer_init is in effect */
 };
 static DEFINE_PER_CPU(struct cpu_dbs_info_s, od_cpu_dbs_info);
 
@@ -124,11 +133,15 @@ static struct dbs_tuners {
 	unsigned int sampling_down_factor;
 	unsigned int powersave_bias;
 	unsigned int io_is_busy;
-	struct notifier_block dvfs_lat_qos_db;
-	unsigned int dvfs_lat_qos_wants;
 	unsigned int freq_step;
 	unsigned int freq_responsiveness;
-
+	unsigned int suspend_freq;
+#ifdef CONFIG_HAS_EARLYSUSPEND
+	unsigned int sampling_factor_suspend;
+	unsigned int up_threshold_suspend;
+	unsigned int freq_step_suspend;
+	int early_suspend;
+#endif
 } dbs_tuners_ins = {
 	.up_threshold = DEF_FREQUENCY_UP_THRESHOLD,
 	.up_threshold_min_freq = UP_THRESHOLD_AT_MIN_FREQ,
@@ -137,31 +150,72 @@ static struct dbs_tuners {
 	.ignore_nice = 0,
 	.powersave_bias = 0,
 	.freq_step = FREQ_STEP,
-	.freq_responsiveness = FREQ_FOR_RESPONSIVENESS
+	.freq_responsiveness = FREQ_FOR_RESPONSIVENESS,
+	.suspend_freq = DEF_SUSPEND_FREQ,
+#ifdef CONFIG_HAS_EARLYSUSPEND
+	.sampling_factor_suspend = SAMPLING_FACTOR_SUSPEND,
+	.up_threshold_suspend = DEF_FREQUENCY_UP_THRESHOLD_SUSPEND,
+	.freq_step_suspend = FREQ_STEP_SUSPEND,
+	.early_suspend = -1,
+#endif
 };
 
 static unsigned int dbs_enable=0;	/* number of CPUs using this policy */
 
-static inline u64 get_cpu_idle_time_jiffy(unsigned int cpu, u64 *wall)
+// hyper suspend mods (Thanks to Imoseyon)
+static unsigned int suspended = 0;
+static void hyper_suspend(int suspend)
 {
-	u64 idle_time;
+        struct cpu_dbs_info_s *dbs_info = &per_cpu(od_cpu_dbs_info, smp_processor_id());
+        if (dbs_enable==0) return;
+        if (!suspend) { // resume at max speed:
+                suspended = 0;
+                __cpufreq_driver_target(dbs_info->cur_policy, dbs_info->cur_policy->max,
+			CPUFREQ_RELATION_L);
+                pr_info("[hyper] hyper awake at %d\n", dbs_info->cur_policy->cur);
+        } else {
+                suspended = 1;
+		// let's give it a little breathing room
+                __cpufreq_driver_target(dbs_info->cur_policy, dbs_tuners_ins.suspend_freq, CPUFREQ_RELATION_H);
+                pr_info("[hyper] hyper suspended at %d\n", dbs_info->cur_policy->cur);
+        }
+}
+
+static void hyper_early_suspend(struct early_suspend *handler) {
+       hyper_suspend(1);
+}
+
+static void hyper_late_resume(struct early_suspend *handler) {
+       hyper_suspend(0);
+}
+
+static struct early_suspend hyper_power_suspend = {
+        .suspend = hyper_early_suspend,
+        .resume = hyper_late_resume,
+        .level = EARLY_SUSPEND_LEVEL_DISABLE_FB + 1,
+};
+
+static inline cputime64_t get_cpu_idle_time_jiffy(unsigned int cpu,
+							cputime64_t *wall)
+{
+	cputime64_t idle_time;
 	cputime64_t cur_wall_time;
-	u64 busy_time;
+	cputime64_t busy_time;
 
 	cur_wall_time = jiffies64_to_cputime64(get_jiffies_64());
-	busy_time = kcpustat_cpu(cpu).cpustat[CPUTIME_USER] +
-		    kcpustat_cpu(cpu).cpustat[CPUTIME_SYSTEM];
+	busy_time = cputime64_add(kstat_cpu(cpu).cpustat.user,
+			kstat_cpu(cpu).cpustat.system);
 
-	busy_time += kcpustat_cpu(cpu).cpustat[CPUTIME_IRQ];
-	busy_time += kcpustat_cpu(cpu).cpustat[CPUTIME_SOFTIRQ];
-	busy_time += kcpustat_cpu(cpu).cpustat[CPUTIME_STEAL];
-	busy_time += kcpustat_cpu(cpu).cpustat[CPUTIME_NICE];
+	busy_time = cputime64_add(busy_time, kstat_cpu(cpu).cpustat.irq);
+	busy_time = cputime64_add(busy_time, kstat_cpu(cpu).cpustat.softirq);
+	busy_time = cputime64_add(busy_time, kstat_cpu(cpu).cpustat.steal);
+	busy_time = cputime64_add(busy_time, kstat_cpu(cpu).cpustat.nice);
 
 	idle_time = cputime64_sub(cur_wall_time, busy_time);
 	if (wall)
-		*wall = jiffies_to_usecs(cur_wall_time);
+		*wall = (cputime64_t)jiffies_to_usecs(cur_wall_time);
 
-	return jiffies_to_usecs(idle_time);
+	return (cputime64_t)jiffies_to_usecs(idle_time);
 }
 
 static inline cputime64_t get_cpu_idle_time(unsigned int cpu, cputime64_t *wall)
@@ -184,23 +238,6 @@ static inline cputime64_t get_cpu_iowait_time(unsigned int cpu, cputime64_t *wal
 		return 0;
 
 	return iowait_time;
-}
-
-/*
- * Find right sampling rate based on sampling_rate and
- * QoS requests on dvfs latency.
- */
-static unsigned int effective_sampling_rate(void)
-{
-	unsigned int effective;
-
-	if (dbs_tuners_ins.dvfs_lat_qos_wants)
-		effective = min(dbs_tuners_ins.dvfs_lat_qos_wants,
-				dbs_tuners_ins.sampling_rate);
-	else
-		effective = dbs_tuners_ins.sampling_rate;
-
-	return max(effective, min_sampling_rate);
 }
 
 /*
@@ -247,7 +284,7 @@ static unsigned int powersave_bias_target(struct cpufreq_policy *policy,
 		dbs_info->freq_lo_jiffies = 0;
 		return freq_lo;
 	}
-	jiffies_total = usecs_to_jiffies(effective_sampling_rate());
+	jiffies_total = usecs_to_jiffies(dbs_tuners_ins.sampling_rate);
 	jiffies_hi = (freq_avg - freq_lo) * jiffies_total;
 	jiffies_hi += ((freq_hi - freq_lo) / 2);
 	jiffies_hi /= (freq_hi - freq_lo);
@@ -258,18 +295,18 @@ static unsigned int powersave_bias_target(struct cpufreq_policy *policy,
 	return freq_hi;
 }
 
-static void hyper_power_powersave_bias_init_cpu(int cpu)
+static void hyper_powersave_bias_init_cpu(int cpu)
 {
 	struct cpu_dbs_info_s *dbs_info = &per_cpu(od_cpu_dbs_info, cpu);
 	dbs_info->freq_table = cpufreq_frequency_get_table(cpu);
 	dbs_info->freq_lo = 0;
 }
 
-static void HYPER_powersave_bias_init(void)
+static void hyper_powersave_bias_init(void)
 {
 	int i;
 	for_each_online_cpu(i) {
-		hyper_power_powersave_bias_init_cpu(i);
+		hyper_powersave_bias_init_cpu(i);
 	}
 }
 
@@ -283,7 +320,7 @@ static ssize_t show_sampling_rate_min(struct kobject *kobj,
 
 define_one_global_ro(sampling_rate_min);
 
-/* cpufreq_hyper_power Governor Tunables */
+/* cpufreq_hyper Governor Tunables */
 #define show_one(file_name, object)					\
 static ssize_t show_##file_name						\
 (struct kobject *kobj, struct attribute *attr, char *buf)              \
@@ -300,11 +337,16 @@ show_one(powersave_bias, powersave_bias);
 show_one(down_differential, down_differential);
 show_one(freq_step, freq_step);
 show_one(freq_responsiveness, freq_responsiveness);
+show_one(suspend_freq, suspend_freq);
+#ifdef CONFIG_HAS_EARLYSUSPEND
+show_one(sampling_factor_suspend, sampling_factor_suspend);
+show_one(up_threshold_suspend, up_threshold_suspend);
+show_one(freq_step_suspend, freq_step_suspend);
+#endif
 
 /**
  * update_sampling_rate - update sampling rate effective immediately if needed.
- * @new_rate: new sampling rate. If it is 0, regard sampling rate is not
- *		changed and assume that qos request value is changed.
+ * @new_rate: new sampling rate
  *
  * If new rate is smaller than the old, simply updaing
  * dbs_tuners_int.sampling_rate might not be appropriate. For example,
@@ -315,78 +357,6 @@ show_one(freq_responsiveness, freq_responsiveness);
  * later. Thus, if we are reducing the sampling rate, we need to make the
  * new value effective immediately.
  */
-static void update_sampling_rate(unsigned int new_rate)
-{
-	int cpu;
-	unsigned int effective;
-
-	if (new_rate)
-		dbs_tuners_ins.sampling_rate = max(new_rate, min_sampling_rate);
-
-	effective = effective_sampling_rate();
-
-	for_each_online_cpu(cpu) {
-		struct cpufreq_policy *policy;
-		struct cpu_dbs_info_s *dbs_info;
-		unsigned long next_sampling, appointed_at;
-
-		/*
-		 * mutex_destory(&dbs_info->timer_mutex) should not happen
-		 * in this context. dbs_mutex is locked/unlocked at GOV_START
-		 * and GOV_STOP context only other than here.
-		 */
-		mutex_lock(&dbs_mutex);
-
-		policy = cpufreq_cpu_get(cpu);
-		if (!policy) {
-			mutex_unlock(&dbs_mutex);
-			continue;
-		}
-		dbs_info = &per_cpu(od_cpu_dbs_info, policy->cpu);
-		cpufreq_cpu_put(policy);
-
-		/* timer_mutex is destroyed or will be destroyed soon */
-		if (!dbs_info->activated) {
-			mutex_unlock(&dbs_mutex);
-			continue;
-		}
-
-		mutex_lock(&dbs_info->timer_mutex);
-
-		if (!delayed_work_pending(&dbs_info->work)) {
-			mutex_unlock(&dbs_info->timer_mutex);
-			mutex_unlock(&dbs_mutex);
-			continue;
-		}
-
-		next_sampling = jiffies + usecs_to_jiffies(new_rate);
-		appointed_at = dbs_info->work.timer.expires;
-
-		if (time_before(next_sampling, appointed_at)) {
-			mutex_unlock(&dbs_info->timer_mutex);
-			cancel_delayed_work_sync(&dbs_info->work);
-			mutex_lock(&dbs_info->timer_mutex);
-
-			schedule_delayed_work_on(dbs_info->cpu, &dbs_info->work,
-						 usecs_to_jiffies(effective));
-		}
-		mutex_unlock(&dbs_info->timer_mutex);
-
-		/*
-		 * For the little possiblity that dbs_timer_exit() has been
-		 * called after checking dbs_info->activated above.
-		 * If cancel_delayed_work_syn() has been calld by
-		 * dbs_timer_exit() before schedule_delayed_work_on() of this
-		 * function, it should be revoked by calling cancel again
-		 * before releasing dbs_mutex, which will trigger mutex_destroy
-		 * to be called.
-		 */
-		if (!dbs_info->activated)
-			cancel_delayed_work_sync(&dbs_info->work);
-
-		mutex_unlock(&dbs_mutex);
-	}
-}
 
 static ssize_t store_sampling_rate(struct kobject *a, struct attribute *b,
 				   const char *buf, size_t count)
@@ -396,7 +366,7 @@ static ssize_t store_sampling_rate(struct kobject *a, struct attribute *b,
 	ret = sscanf(buf, "%u", &input);
 	if (ret != 1)
 		return -EINVAL;
-	update_sampling_rate(input);
+	dbs_tuners_ins.sampling_rate = max(input, min_sampling_rate);
 	return count;
 }
 
@@ -409,6 +379,7 @@ static ssize_t store_io_is_busy(struct kobject *a, struct attribute *b,
 	ret = sscanf(buf, "%u", &input);
 	if (ret != 1)
 		return -EINVAL;
+
 	dbs_tuners_ins.io_is_busy = !!input;
 	return count;
 }
@@ -490,7 +461,7 @@ static ssize_t store_ignore_nice_load(struct kobject *a, struct attribute *b,
 		dbs_info->prev_cpu_idle = get_cpu_idle_time(j,
 						&dbs_info->prev_cpu_wall);
 		if (dbs_tuners_ins.ignore_nice)
-			dbs_info->prev_cpu_nice = kcpustat_cpu(j).cpustat[CPUTIME_NICE];
+			dbs_info->prev_cpu_nice = kstat_cpu(j).cpustat.nice;
 
 	}
 	return count;
@@ -510,7 +481,7 @@ static ssize_t store_powersave_bias(struct kobject *a, struct attribute *b,
 		input = 1000;
 
 	dbs_tuners_ins.powersave_bias = input;
-	HYPER_powersave_bias_init();
+	hyper_powersave_bias_init();
 	return count;
 }
 
@@ -559,6 +530,70 @@ static ssize_t store_freq_responsiveness(struct kobject *a, struct attribute *b,
 	return count;
 }
 
+static ssize_t store_suspend_freq(struct kobject *a, struct attribute *b,
+				    const char *buf, size_t count)
+{
+	unsigned int input;
+	int ret;
+	ret = sscanf(buf, "%u", &input);
+
+	if (ret != 1)
+		return -EINVAL;
+
+	if (input > 1200000)
+		input = 1200000;
+
+	if (input < 100000)
+		input = 100000;
+
+	dbs_tuners_ins.suspend_freq = input;
+
+	return count;
+}
+
+#ifdef CONFIG_HAS_EARLYSUSPEND
+static ssize_t store_sampling_factor_suspend(struct kobject *a, struct attribute *b,
+				   const char *buf, size_t count)
+{
+	unsigned int input;
+	int ret;
+	ret = sscanf(buf, "%u", &input);
+	if (ret != 1 || input > 10 ||
+			input < 1) {
+		return -EINVAL;
+	}
+	dbs_tuners_ins.sampling_factor_suspend = input;
+	return count;
+}
+
+static ssize_t store_up_threshold_suspend(struct kobject *a, struct attribute *b,
+				  const char *buf, size_t count)
+{
+	unsigned int input;
+	int ret;
+	ret = sscanf(buf, "%u", &input);
+
+	if (ret != 1 || input > MAX_FREQUENCY_UP_THRESHOLD ||
+			input < MIN_FREQUENCY_UP_THRESHOLD) {
+		return -EINVAL;
+	}
+	dbs_tuners_ins.up_threshold_suspend = input;
+	return count;
+}
+
+static ssize_t store_freq_step_suspend(struct kobject *a, struct attribute *b,
+				   const char *buf, size_t count)
+{
+	unsigned int input;
+	int ret;
+	ret = sscanf(buf, "%u", &input);
+	if (ret != 1)
+		return -EINVAL;
+	dbs_tuners_ins.freq_step_suspend = min(input, 100u);
+	return count;
+}
+#endif
+
 define_one_global_rw(sampling_rate);
 define_one_global_rw(io_is_busy);
 define_one_global_rw(up_threshold);
@@ -569,6 +604,12 @@ define_one_global_rw(powersave_bias);
 define_one_global_rw(down_differential);
 define_one_global_rw(freq_step);
 define_one_global_rw(freq_responsiveness);
+define_one_global_rw(suspend_freq);
+#ifdef CONFIG_HAS_EARLYSUSPEND
+define_one_global_rw(sampling_factor_suspend);
+define_one_global_rw(up_threshold_suspend);
+define_one_global_rw(freq_step_suspend);
+#endif
 
 static struct attribute *dbs_attributes[] = {
 	&sampling_rate_min.attr,
@@ -582,12 +623,18 @@ static struct attribute *dbs_attributes[] = {
 	&down_differential.attr,
 	&freq_step.attr,
 	&freq_responsiveness.attr,
+	&suspend_freq.attr,
+#ifdef CONFIG_HAS_EARLYSUSPEND
+	&sampling_factor_suspend.attr,
+	&up_threshold_suspend.attr,
+	&freq_step_suspend.attr,
+#endif
 	NULL
 };
 
 static struct attribute_group dbs_attr_group = {
 	.attrs = dbs_attributes,
-	.name = "HYPER",
+	.name = "hyper",
 };
 
 /************************** sysfs end ************************/
@@ -596,7 +643,7 @@ static void dbs_freq_increase(struct cpufreq_policy *p, unsigned int freq)
 {
 	if (dbs_tuners_ins.powersave_bias)
 		freq = powersave_bias_target(p, freq, CPUFREQ_RELATION_H);
-#if !defined(CONFIG_ARCH_EXYNOS4) && !defined(CONFIG_ARCH_EXYNOS5)
+#ifndef CONFIG_ARCH_EXYNOS4
 	else if (p->cur == p->max)
 		return;
 #endif
@@ -637,46 +684,15 @@ static void dbs_check_cpu(struct cpu_dbs_info_s *this_dbs_info)
 		unsigned int idle_time, wall_time, iowait_time;
 		unsigned int load, load_freq;
 		int freq_avg;
-		bool deep_sleep_detected = false;
-		/* the evil magic numbers, only 2 at least */
-		const unsigned int deep_sleep_backoff = 10;
-		const unsigned int deep_sleep_factor = 5;
 
 		j_dbs_info = &per_cpu(od_cpu_dbs_info, j);
 
 		cur_idle_time = get_cpu_idle_time(j, &cur_wall_time);
-
 		cur_iowait_time = get_cpu_iowait_time(j, &cur_wall_time);
 
 		wall_time = (unsigned int) cputime64_sub(cur_wall_time,
 				j_dbs_info->prev_cpu_wall);
 		j_dbs_info->prev_cpu_wall = cur_wall_time;
-
-		/*
-		 * Ignore wall delta jitters in both directions.  An
-		 * exceptionally long wall_time will likely result
-		 * idle but it was waken up to do work so the next
-		 * slice is less likely to want to run at low
-		 * frequency. Let's evaluate the next slice instead of
-		 * the idle long one that passed already and it's too
-		 * late to reduce in frequency.  As opposed an
-		 * exceptionally short slice that just run at low
-		 * frequency is unlikely to be idle, but we may go
-		 * back to idle pretty soon and that not idle slice
-		 * already passed. If short slices will keep coming
-		 * after a series of long slices the exponential
-		 * backoff will converge faster and we'll react faster
-		 * to high load. As opposed we'll decay slower
-		 * towards low load and long idle times.
-		 */
-		if (j_dbs_info->prev_cpu_wall_delta >
-		    wall_time * deep_sleep_factor ||
-		    j_dbs_info->prev_cpu_wall_delta * deep_sleep_factor <
-		    wall_time)
-			deep_sleep_detected = true;
-		j_dbs_info->prev_cpu_wall_delta =
-			(j_dbs_info->prev_cpu_wall_delta * deep_sleep_backoff
-			 + wall_time) / (deep_sleep_backoff+1);
 
 		idle_time = (unsigned int) cputime64_sub(cur_idle_time,
 				j_dbs_info->prev_cpu_idle);
@@ -687,11 +703,11 @@ static void dbs_check_cpu(struct cpu_dbs_info_s *this_dbs_info)
 		j_dbs_info->prev_cpu_iowait = cur_iowait_time;
 
 		if (dbs_tuners_ins.ignore_nice) {
-			u64 cur_nice;
+			cputime64_t cur_nice;
 			unsigned long cur_nice_jiffies;
 
-			cur_nice = kcpustat_cpu(j).cpustat[CPUTIME_NICE] -
-					 j_dbs_info->prev_cpu_nice;
+			cur_nice = cputime64_sub(kstat_cpu(j).cpustat.nice,
+					 j_dbs_info->prev_cpu_nice);
 			/*
 			 * Assumption: nice time between sampling periods will
 			 * be less than 2^32 jiffies for 32 bit sys
@@ -699,15 +715,12 @@ static void dbs_check_cpu(struct cpu_dbs_info_s *this_dbs_info)
 			cur_nice_jiffies = (unsigned long)
 					cputime64_to_jiffies64(cur_nice);
 
-			j_dbs_info->prev_cpu_nice = kcpustat_cpu(j).cpustat[CPUTIME_NICE];
+			j_dbs_info->prev_cpu_nice = kstat_cpu(j).cpustat.nice;
 			idle_time += jiffies_to_usecs(cur_nice_jiffies);
 		}
 
-		if (deep_sleep_detected)
-			continue;
-
 		/*
-		 * For the purpose of HYPER, waiting for disk IO is an
+		 * For the purpose of hyper, waiting for disk IO is an
 		 * indication that you're performance critical, and not that
 		 * the system is actually idle. So subtract the iowait time
 		 * from the cpu idle time.
@@ -731,8 +744,10 @@ static void dbs_check_cpu(struct cpu_dbs_info_s *this_dbs_info)
 	}
 
 	/* Check for frequency increase */
-	if (policy->cur < dbs_tuners_ins.freq_responsiveness)
+	if (policy->cur < dbs_tuners_ins.freq_responsiveness
+		&& dbs_tuners_ins.early_suspend == -1) {
 			up_threshold = dbs_tuners_ins.up_threshold_min_freq;
+	}
 
 	if (max_load_freq > up_threshold * policy->cur) {
 		int inc = (policy->max * dbs_tuners_ins.freq_step) / 100;
@@ -746,7 +761,7 @@ static void dbs_check_cpu(struct cpu_dbs_info_s *this_dbs_info)
 	}
 
 	/* Check for frequency decrease */
-#if !defined(CONFIG_ARCH_EXYNOS4) && !defined(CONFIG_ARCH_EXYNOS5)
+#ifndef CONFIG_ARCH_EXYNOS4
 	/* if we cannot reduce the frequency anymore, break out early */
 	if (policy->cur == policy->min)
 		return;
@@ -776,7 +791,8 @@ static void dbs_check_cpu(struct cpu_dbs_info_s *this_dbs_info)
 			- dbs_tuners_ins.down_differential;
 
 		if (freq_next < dbs_tuners_ins.freq_responsiveness
-			&& (max_load_freq / freq_next) > down_thres)
+			&& (max_load_freq / freq_next) > down_thres
+				&& dbs_tuners_ins.early_suspend == -1)
 			freq_next = dbs_tuners_ins.freq_responsiveness;
 
 		if (!dbs_tuners_ins.powersave_bias) {
@@ -815,13 +831,14 @@ static void do_dbs_timer(struct work_struct *work)
 			/* We want all CPUs to do sampling nearly on
 			 * same jiffy
 			 */
-			delay = usecs_to_jiffies(effective_sampling_rate()
+			delay = usecs_to_jiffies(dbs_tuners_ins.sampling_rate
 				* dbs_info->rate_mult);
 
 			if (num_online_cpus() > 1)
 				delay -= jiffies % delay;
 		}
 	} else {
+		if (!suspended)
 		__cpufreq_driver_target(dbs_info->cur_policy,
 			dbs_info->freq_lo, CPUFREQ_RELATION_H);
 		delay = dbs_info->freq_lo_jiffies;
@@ -833,20 +850,18 @@ static void do_dbs_timer(struct work_struct *work)
 static inline void dbs_timer_init(struct cpu_dbs_info_s *dbs_info)
 {
 	/* We want all CPUs to do sampling nearly on same jiffy */
-	int delay = usecs_to_jiffies(effective_sampling_rate());
+	int delay = usecs_to_jiffies(dbs_tuners_ins.sampling_rate);
 
 	if (num_online_cpus() > 1)
 		delay -= jiffies % delay;
 
 	dbs_info->sample_type = DBS_NORMAL_SAMPLE;
 	INIT_DELAYED_WORK_DEFERRABLE(&dbs_info->work, do_dbs_timer);
-	schedule_delayed_work_on(dbs_info->cpu, &dbs_info->work, 10 * delay);
-	dbs_info->activated = true;
+	schedule_delayed_work_on(dbs_info->cpu, &dbs_info->work, delay);
 }
 
 static inline void dbs_timer_exit(struct cpu_dbs_info_s *dbs_info)
 {
-	dbs_info->activated = false;
 	cancel_delayed_work_sync(&dbs_info->work);
 }
 
@@ -861,8 +876,41 @@ static inline void dbs_timer_exit(struct cpu_dbs_info_s *dbs_info)
  */
 static int should_io_be_busy(void)
 {
+#if defined(CONFIG_X86)
+	/*
+	 * For Intel, Core 2 (model 15) andl later have an efficient idle.
+	 */
+	if (boot_cpu_data.x86_vendor == X86_VENDOR_INTEL &&
+	    boot_cpu_data.x86 == 6 &&
+	    boot_cpu_data.x86_model >= 15)
+		return 1;
+#endif
 	return 0;
 }
+
+#ifdef CONFIG_HAS_EARLYSUSPEND
+static struct early_suspend early_suspend;
+unsigned int prev_up_threshold_hyper;
+unsigned int prev_freq_step_hyper;
+unsigned int prev_sampling_rate_hyper;
+static void cpufreq_hyper_early_suspend(struct early_suspend *h)
+{
+	dbs_tuners_ins.early_suspend = 1;
+	prev_freq_step_hyper = dbs_tuners_ins.freq_step;
+	prev_sampling_rate_hyper = dbs_tuners_ins.sampling_rate;
+	prev_up_threshold_hyper = dbs_tuners_ins.up_threshold;
+	dbs_tuners_ins.freq_step = dbs_tuners_ins.freq_step_suspend;
+	dbs_tuners_ins.sampling_rate *= dbs_tuners_ins.sampling_factor_suspend;
+	dbs_tuners_ins.up_threshold = dbs_tuners_ins.up_threshold_suspend;
+}
+static void cpufreq_hyper_late_resume(struct early_suspend *h)
+{
+	dbs_tuners_ins.early_suspend = -1;
+	dbs_tuners_ins.freq_step = prev_freq_step_hyper;
+	dbs_tuners_ins.sampling_rate = prev_sampling_rate_hyper;
+	dbs_tuners_ins.up_threshold = prev_up_threshold_hyper;
+}
+#endif
 
 static int cpufreq_governor_dbs(struct cpufreq_policy *policy,
 				   unsigned int event)
@@ -889,13 +937,14 @@ static int cpufreq_governor_dbs(struct cpufreq_policy *policy,
 
 			j_dbs_info->prev_cpu_idle = get_cpu_idle_time(j,
 						&j_dbs_info->prev_cpu_wall);
-			if (dbs_tuners_ins.ignore_nice)
+			if (dbs_tuners_ins.ignore_nice) {
 				j_dbs_info->prev_cpu_nice =
-						kcpustat_cpu(j).cpustat[CPUTIME_NICE];
+						kstat_cpu(j).cpustat.nice;
+			}
 		}
 		this_dbs_info->cpu = cpu;
 		this_dbs_info->rate_mult = 1;
-		hyper_power_powersave_bias_init_cpu(cpu);
+		hyper_powersave_bias_init_cpu(cpu);
 		/*
 		 * Start the timerschedule work, when this governor
 		 * is used for first time
@@ -926,9 +975,17 @@ static int cpufreq_governor_dbs(struct cpufreq_policy *policy,
 
 		mutex_init(&this_dbs_info->timer_mutex);
 		dbs_timer_init(this_dbs_info);
+#ifdef CONFIG_HAS_EARLYSUSPEND
+                register_early_suspend(&early_suspend);
+		register_early_suspend(&hyper_power_suspend);
+#endif
 		break;
 
 	case CPUFREQ_GOV_STOP:
+#ifdef CONFIG_HAS_EARLYSUSPEND
+                unregister_early_suspend(&early_suspend);
+		unregister_early_suspend(&hyper_power_suspend);
+#endif
 		dbs_timer_exit(this_dbs_info);
 
 		mutex_lock(&dbs_mutex);
@@ -938,7 +995,6 @@ static int cpufreq_governor_dbs(struct cpufreq_policy *policy,
 		if (!dbs_enable)
 			sysfs_remove_group(cpufreq_global_kobject,
 					   &dbs_attr_group);
-
 		break;
 
 	case CPUFREQ_GOV_LIMITS:
@@ -955,42 +1011,12 @@ static int cpufreq_governor_dbs(struct cpufreq_policy *policy,
 	return 0;
 }
 
-/**
- * qos_dvfs_lat_notify - PM QoS Notifier for DVFS_LATENCY QoS Request
- * @nb		notifier block struct
- * @value	QoS value
- * @dummy
- */
-static int qos_dvfs_lat_notify(struct notifier_block *nb, unsigned long value,
-			       void *dummy)
-{
-	/*
-	 * In the worst case, with a continuous up-treshold + e cpu load
-	 * from up-threshold - e load, the ondemand governor will react
-	 * sampling_rate * 2.
-	 *
-	 * Thus, based on the worst case scenario, we use value / 2;
-	 */
-	dbs_tuners_ins.dvfs_lat_qos_wants = value / 2;
-
-	/* Update sampling rate */
-	update_sampling_rate(0);
-
-	return NOTIFY_OK;
-}
-
-static struct notifier_block HYPER_qos_dvfs_lat_nb = {
-	.notifier_call = qos_dvfs_lat_notify,
-};
-
 static int __init cpufreq_gov_dbs_init(void)
 {
-	cputime64_t wall;
 	u64 idle_time;
 	int cpu = get_cpu();
-	int err = 0;
 
-	idle_time = get_cpu_idle_time_us(cpu, &wall);
+	idle_time = get_cpu_idle_time_us(cpu, NULL);
 	put_cpu();
 	if (idle_time != -1ULL) {
 		/* Idle micro accounting is supported. Use finer thresholds */
@@ -1009,32 +1035,26 @@ static int __init cpufreq_gov_dbs_init(void)
 			MIN_SAMPLING_RATE_RATIO * jiffies_to_usecs(1);
 	}
 
-	err = pm_qos_add_notifier(PM_QOS_DVFS_RESPONSE_LATENCY,
-			    &HYPER_qos_dvfs_lat_nb);
-	if (err)
-		return err;
+#ifdef CONFIG_HAS_EARLYSUSPEND
+	early_suspend.level = EARLY_SUSPEND_LEVEL_DISABLE_FB;
+	early_suspend.suspend = cpufreq_hyper_early_suspend;
+	early_suspend.resume = cpufreq_hyper_late_resume;
+#endif
 
-	err = cpufreq_register_governor(&cpufreq_gov_HYPER);
-	if (err) {
-		pm_qos_remove_notifier(PM_QOS_DVFS_RESPONSE_LATENCY,
-				       &HYPER_qos_dvfs_lat_nb);
-	}
-
-	return err;
+	return cpufreq_register_governor(&cpufreq_gov_hyper);
 }
 
 static void __exit cpufreq_gov_dbs_exit(void)
 {
-	pm_qos_remove_notifier(PM_QOS_DVFS_RESPONSE_LATENCY,
-			       &HYPER_qos_dvfs_lat_nb);
-
-	cpufreq_unregister_governor(&cpufreq_gov_HYPER);
+	cpufreq_unregister_governor(&cpufreq_gov_hyper);
 }
 
 MODULE_AUTHOR("Venkatesh Pallipadi <venkatesh.pallipadi@intel.com>");
 MODULE_AUTHOR("Alexey Starikovskiy <alexey.y.starikovskiy@intel.com>");
-MODULE_DESCRIPTION("'cpufreq_HYPER' - A dynamic cpufreq governor for "
-	"Low Latency Frequency Transition capable processors");
+MODULE_AUTHOR("Dorimanx <yuri@bynet.co.il>");
+MODULE_DESCRIPTION("'cpufreq_hyper' - A dynamic cpufreq governor for "
+	"Low Latency Frequency Transition capable processors" 
+"Module include, IOWAIT,FREQ-TUNERS,EARLY-SUSPEND,SUSPEND-FREQ");
 MODULE_LICENSE("GPL");
 
 #ifdef CONFIG_CPU_FREQ_DEFAULT_GOV_HYPER

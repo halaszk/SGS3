@@ -80,6 +80,19 @@ config CPU_FREQ_DEFAULT_GOV_ABYSSPLUG
 	the help section of the driver. Fallback governor will be the
 	performance governor.
 
+config CPU_FREQ_DEFAULT_GOV_ONDEMANDQ
+	bool "ondemandq"
+	select CPU_FREQ_GOV_ONDEMANDQ
+	select CPU_FREQ_GOV_PERFORMANCE
+	help
+	  Use the CPUFreq governor 'ondemandq' as default. This allows
+	  you to get a full dynamic frequency capable system by simply
+	  loading your cpufreq low-level hardware driver.
+	  Be aware that not all cpufreq drivers support the ondemandq
+	  governor. If unsure have a look at the help section of the
+	  driver. Fallback governor will be the performance governor.
+
+
 config CPU_FREQ_DEFAULT_GOV_SLEEPY
 	bool "sleepy"
 	select CPU_FREQ_GOV_SCARY
@@ -197,6 +210,47 @@ config CPU_FREQ_GOV_ABYSSPLUG
 	'ondemand' instead.
 
 	If in doubt, say N.
+
+config CPU_FREQ_GOV_ONDEMANDQ
+	tristate "'ondemandq' cpufreq policy governor"
+	select CPU_FREQ_TABLE
+	help
+	  'ondemandq' - This driver adds a dynamic cpufreq policy governor.
+	  The governor does a periodic polling and 
+	  changes frequency based on the CPU utilization.
+	  The support for this governor depends on CPU capability to
+	  do fast frequency switching (i.e, very low latency frequency
+	  transitions). 
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called cpufreq_ondemandq.
+
+	  For details, take a look at linux/Documentation/cpu-freq.
+
+	  If in doubt, say N.
+
+config CPU_FREQ_GOV_ONDEMANDQ_FLEXRATE
+	bool "flexrate interface for 'ondemandq' cpufreq policy governor"
+	depends on CPU_FREQ_GOV_ONDEMANDQ
+	help
+	  Flexrate for 'ondemandq' governor provides an interface to request
+	  faster polling temporarily. This is to let it react quickly to
+	  load changes when there is high probablity of load increase
+	  in short time. For example, when a user event occurs, we have
+	  use this interface. It does not increase the frequency
+	  unconditionally; however, it allows ondemandq to react fast
+	  by temporarily decreasing sampling rate. Flexrate provides both
+	  sysfs interface and in-kernel interface.
+
+config CPU_FREQ_GOV_ONDEMANDQ_FLEXRATE_MAX_DURATION
+	int "flexrate's maximum duration of sampling rate override"
+	range 5 500
+	depends on CPU_FREQ_GOV_ONDEMANDQ_FLEXRATE
+	default "100"
+	help
+	  The maximum number of ondemandq sampling whose rate is
+	  overriden by Flexrate for ondemandq.
+
 
 config CPU_FREQ_GOV_SLEEPY
 	tristate "'sleepy' cpufreq governor"
