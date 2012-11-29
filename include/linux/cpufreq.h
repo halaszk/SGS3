@@ -75,6 +75,8 @@ extern struct kobject *cpufreq_global_kobject;
 #define CPUFREQ_ETERNAL			(-1)
 struct cpufreq_cpuinfo {
 	unsigned int		max_freq;
+	unsigned int            max_suspend;    /* in kHz */
+	unsigned int            min_suspend;    /* in kHz */
 	unsigned int		min_freq;
 
 	/* in 10^(-9) s = nanoseconds */
@@ -83,7 +85,9 @@ struct cpufreq_cpuinfo {
 
 struct cpufreq_real_policy {
 	unsigned int		min;    /* in kHz */
+	unsigned int            min_suspend;    /* in kHz */
 	unsigned int		max;    /* in kHz */
+	unsigned int            max_suspend;    /* in kHz */
 	unsigned int		policy; /* see above */
 	struct cpufreq_governor	*governor; /* see below */
 };
