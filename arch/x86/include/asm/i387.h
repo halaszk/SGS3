@@ -216,12 +216,6 @@ static inline void fpu_fxsave(struct fpu *fpu)
  * These must be called with preempt disabled. Returns
  * 'true' if the FPU state is still intact.
  */
-#ifdef CONFIG_SMP
-#define safe_address (__per_cpu_offset[0])
-#else
-#define safe_address (__get_cpu_var(kernel_cpustat).cpustat[CPUTIME_USER])
-#endif
-
 static inline int fpu_save_init(struct fpu *fpu)
 {
 	if (use_xsave()) {
