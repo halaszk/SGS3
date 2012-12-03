@@ -26,7 +26,7 @@
 #include <plat/clock.h>
 #include <plat/cpu.h>
 
-#define CPUFREQ_LEVEL_END	(L16 + 1)
+#define CPUFREQ_LEVEL_END	(L17 + 1)
 
 #undef PRINT_DIV_VAL
 
@@ -66,6 +66,7 @@ static struct cpufreq_frequency_table exynos4x12_freq_table[] = {
 	{L14, 400*1000},
 	{L15, 300*1000},
 	{L16, 200*1000},
+	{L17, 100*1000},
 	{0, CPUFREQ_TABLE_END},
 };
 
@@ -180,6 +181,9 @@ static unsigned int clkdiv_cpu0_4412[CPUFREQ_LEVEL_END][8] = {
 
 	/* ARM L16: 200MHz */
 	{ 0, 1, 3, 0, 1, 1, 1, 0 },
+
+	/* ARM: 100MHz */
+	{ 0, 1, 3, 0, 1, 1, 1, 0 },
 };
 
 static unsigned int clkdiv_cpu1_4212[CPUFREQ_LEVEL_END][2] = {
@@ -287,6 +291,9 @@ static unsigned int clkdiv_cpu1_4412[CPUFREQ_LEVEL_END][3] = {
 
 	/* ARM L18: 200MHz */
 	{ 3, 0, 0 },
+
+	/* 100MHz */
+	{ 3, 0, 0 },
 };
 
 static unsigned int exynos4x12_apll_pms_table[CPUFREQ_LEVEL_END] = {
@@ -341,6 +348,8 @@ static unsigned int exynos4x12_apll_pms_table[CPUFREQ_LEVEL_END] = {
 	/* APLL FOUT L18: 200MHz */
 	((100<<16)|(3<<8)|(0x2)),
 
+	/* APLL FOUT 100MHz */
+	((100<<16)|(3<<8)|(0x3)),
 };
 
 /*
@@ -393,6 +402,7 @@ static const unsigned int asv_voltage_step_12_5[CPUFREQ_LEVEL_END][12] = {
 	{  975000,  962500,  950000,  925000,  950000,  925000,	 925000,  925000,  900000,  900000,  900000,  887500 }, /* L14 400MHz */
 	{  950000,  937500,  925000,  900000,  925000,  900000,	 900000,  900000,  900000,  887500,  875000,  862500 }, /* L15 300MHz */
 	{  925000,  912500,  900000,  900000,  900000,  900000,	 900000,  900000,  887500,  875000,  875000,  862500 }, /* L16 200MHz */
+	{  925000,  912500,  900000,  900000,  900000,  900000,	 900000,  900000,  887500,  875000,  875000,  862500 }, /* L17 100MHz */
 };
 //#endif
 /* 20120927 DVFS table for pega prime */
@@ -415,12 +425,14 @@ static const unsigned int asv_voltage_step_12_5_rev2[CPUFREQ_LEVEL_END][13] = {
 	{  950000,  937500,  937500,  937500,  925000,  912500,  900000,  887500,  887500,  887500,  875000,  875000,  875000 }, /* L14 400MHz */
 	{  937500,  925000,  925000,  925000,  912500,  900000,  887500,  887500,  887500,  887500,  875000,  875000,  875000 }, /* L15 300MHz */
 	{  925000,  912500,  912500,  912500,  900000,  887500,  887500,  887500,  887500,  887500,  875000,  875000,  875000 }, /* L16 200MHz */
+	{  925000,  912500,  900000,  900000,  900000,  900000,	 900000,  900000,  887500,  875000,  875000,  862500,  700000 }, /* L17 100MHz */
 };
 
 static void set_clkdiv(unsigned int div_index)
 {
 	unsigned int tmp;
 	unsigned int stat_cpu1;
+
 
 	/* Change Divider - CPU0 */
 
