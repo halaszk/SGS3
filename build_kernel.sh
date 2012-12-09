@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 # location
 export KERNELDIR=`readlink -f .`
@@ -17,6 +17,31 @@ export CROSS_COMPILE=$PARENT_DIR/android_prebuilt/linux-x86/toolchain/arm-eabi-4
 if [ "${1}" != "" ];then
 export KERNELDIR=`readlink -f ${1}`
 fi
+
+# Importing PATCH for GCC depend on GCC version.
+GCCVERSION_OLD=`${CROSS_COMPILE}gcc --version | cut -d " " -f3 | cut -c3-5 | grep -iv "09" | grep -iv "ee" | grep -iv "en"`
+GCCVERSION_NEW=`${CROSS_COMPILE}gcc --version | cut -d " " -f4 | cut -c1-3 | grep -iv "Fre" | grep -iv "sof" | grep -iv "for" | grep -iv "auc"`
+
+if [ "a$GCCVERSION_OLD" == "a4.3" ]; then
+        cp $KERNELDIR/arch/arm/boot/compressed/Makefile_old_gcc $KERNELDIR/arch/arm/boot/compressed/Makefile
+        echo "GCC 4.3.X Compiler Detected, building"
+elif [ "a$GCCVERSION_OLD" == "a4.4" ]; then
+        cp $KERNELDIR/arch/arm/boot/compressed/Makefile_old_gcc $KERNELDIR/arch/arm/boot/compressed/Makefile
+        echo "GCC 4.4.X Compiler Detected, building"
+elif [ "a$GCCVERSION_OLD" == "a4.5" ]; then
+        cp $KERNELDIR/arch/arm/boot/compressed/Makefile_old_gcc $KERNELDIR/arch/arm/boot/compressed/Makefile
+        echo "GCC 4.5.X Compiler Detected, building"
+elif [ "a$GCCVERSION_NEW" == "a4.6" ]; then
+        cp $KERNELDIR/arch/arm/boot/compressed/Makefile_linaro $KERNELDIR/arch/arm/boot/compressed/Makefile
+        echo "GCC 4.6.X Compiler Detected, building"
+elif [ "a$GCCVERSION_NEW" == "a4.7" ]; then
+        cp $KERNELDIR/arch/arm/boot/compressed/Makefile_linaro $KERNELDIR/arch/arm/boot/compressed/Makefile
+        echo "GCC 4.7.X Compiler Detected, building"
+else
+        echo "Compiler not recognized! please fix the CUT function to match your compiler."
+        exit 0
+fi;
+
 
 NAMBEROFCPUS=`grep 'processor' /proc/cpuinfo | wc -l`
 
