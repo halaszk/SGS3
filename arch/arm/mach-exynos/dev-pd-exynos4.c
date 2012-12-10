@@ -14,6 +14,7 @@
 #include <linux/kernel.h>
 #include <linux/platform_device.h>
 #include <linux/delay.h>
+#include <linux/module.h>
 
 #include <mach/regs-pmu.h>
 #include <mach/regs-clock.h>
@@ -253,3 +254,5 @@ struct platform_device exynos4_device_pd[] = {
 		},
 	}, 
 };
+EXPORT_SYMBOL(exynos4_device_pd);
+

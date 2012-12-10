@@ -14,6 +14,7 @@
 #include <linux/kernel.h>
 #include <linux/platform_device.h>
 #include <linux/delay.h>
+#include <linux/module.h>
 
 #include <mach/regs-pmu.h>
 #include <mach/regs-pmu5.h>
@@ -36,7 +37,7 @@ int exynos_pd_init(struct device *dev)
 
 	return 0;
 }
-
+EXPORT_SYMBOL(exynos_pd_enable);
 int exynos_pd_enable(struct device *dev)
 {
 	struct samsung_pd_info *pdata =  dev->platform_data;

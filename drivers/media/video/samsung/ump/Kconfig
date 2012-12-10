@@ -5,7 +5,7 @@
 #
 # For UMP
 config VIDEO_UMP
-	bool "Enable UMP(Unified Memory Provider)"
+	tristate "Enable UMP(Unified Memory Provider)"
 	default y
 	---help---
 		This enables UMP memory provider
