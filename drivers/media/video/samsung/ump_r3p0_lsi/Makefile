@@ -52,15 +52,16 @@ INCLUDES += \
 		-I$(UDD_FILE_PREFIX)linux\
 		-I$(UDD_FILE_PREFIX)include\
 		-I$(UDD_FILE_PREFIX)linux/license/gpl/\
-		-I$(UDD_FILE_PREFIX)../mali_r3p0_lsi/common\
-		-I$(UDD_FILE_PREFIX)../mali_r3p0_lsi/linux
+		-I$(UDD_FILE_PREFIX)../mali/common\
+		-I$(UDD_FILE_PREFIX)../mali/linux
 
 OSKFILES+=\
-		$(KBUILDROOT)../mali_r3p0_lsi/linux/mali_osk_atomics.o \
-		$(KBUILDROOT)../mali_r3p0_lsi/linux/mali_osk_locks.o \
-		$(KBUILDROOT)../mali_r3p0_lsi/linux/mali_osk_math.o \
-		$(KBUILDROOT)../mali_r3p0_lsi/linux/mali_osk_memory.o \
-		$(KBUILDROOT)../mali_r3p0_lsi/linux/mali_osk_misc.o
+		$(KBUILDROOT)../mali/linux/mali_osk_atomics.o \
+		$(KBUILDROOT)../mali/linux/mali_osk_locks.o \
+		$(KBUILDROOT)../mali/linux/mali_osk_math.o \
+		$(KBUILDROOT)../mali/linux/mali_osk_memory.o \
+		$(KBUILDROOT)../mali/linux/mali_osk_misc.o
+
 ump-y := \
 		$(KBUILDROOT)linux/ump_kernel_linux.o \
 		$(KBUILDROOT)linux/ump_kernel_memory_backend_os.o \
@@ -85,6 +86,7 @@ EXTRA_CFLAGS += $(INCLUDES) \
 
 
 # Get subversion revision number, fall back to 0000 if no svn info is available
-SVN_REV:=$(shell ((svnversion | grep -E "^[0-9]+" && echo -n 'Revision: ' && svnversion) || git svn info | sed -e 's/$$$$/M/' | grep '^Revision: ' || echo ${MALI_RELEASE_NAME}) 2>/dev/null | sed -e 's/^Revision: //')
+SVN_REV:=$(shell ((svnversion | grep -qv exported && echo -n 'Revision: ' && svnversion) || git svn info | sed -e 's/$$$$/M/' | grep '^Revision: ' || echo ${MALI_RELEASE_NAME}) 2>/dev/null | sed -e 's/^Revision: //')
+
 EXTRA_CFLAGS += -DSVN_REV=$(SVN_REV)
 EXTRA_CFLAGS += -DSVN_REV_STRING=\"$(SVN_REV)\"

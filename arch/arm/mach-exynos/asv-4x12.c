@@ -16,7 +16,6 @@
 #include <linux/err.h>
 #include <linux/clk.h>
 #include <linux/io.h>
-#include <linux/module.h>
 
 #include <mach/asv.h>
 #include <mach/map.h>
@@ -45,7 +44,6 @@
 #define CHIP_ID_REG		(S5P_VA_CHIPID + 0x4)
 
 unsigned int exynos_armclk_max;
-EXPORT_SYMBOL(exynos_armclk_max);
 
 struct asv_judge_table exynos4x12_limit[] = {
 	/* HPM, IDS */

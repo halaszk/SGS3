@@ -29,7 +29,6 @@
 #include <linux/seq_file.h>
 #include <linux/uaccess.h>
 #include <linux/debugfs.h>
-#include <linux/module.h>
 
 #include "ion_priv.h"
 #define DEBUG
@@ -415,7 +414,7 @@ void ion_free(struct ion_client *client, struct ion_handle *handle)
 	}
 	ion_handle_put(handle);
 }
-EXPORT_SYMBOL(ion_free);
+
 static void ion_client_get(struct ion_client *client);
 static int ion_client_put(struct ion_client *client);
 
@@ -545,7 +544,7 @@ struct scatterlist *ion_map_dma(struct ion_client *client,
 	mutex_unlock(&client->lock);
 	return sglist;
 }
-EXPORT_SYMBOL(ion_map_dma);
+
 void ion_unmap_kernel(struct ion_client *client, struct ion_handle *handle)
 {
 	struct ion_buffer *buffer;
@@ -575,7 +574,7 @@ void ion_unmap_dma(struct ion_client *client, struct ion_handle *handle)
 	mutex_unlock(&buffer->lock);
 	mutex_unlock(&client->lock);
 }
-EXPORT_SYMBOL(ion_unmap_dma);
+
 
 struct ion_buffer *ion_share(struct ion_client *client,
 				 struct ion_handle *handle)
@@ -597,7 +596,7 @@ struct ion_buffer *ion_share(struct ion_client *client,
 	 */
 	return handle->buffer;
 }
-EXPORT_SYMBOL(ion_import_fd);
+
 struct ion_handle *ion_import(struct ion_client *client,
 			      struct ion_buffer *buffer)
 {
@@ -868,7 +867,7 @@ struct ion_client *ion_client_create(struct ion_device *dev,
 
 	return client;
 }
-EXPORT_SYMBOL(ion_client_create);
+
 static void _ion_client_destroy(struct kref *kref)
 {
 	struct ion_client *client = container_of(kref, struct ion_client, ref);
@@ -908,7 +907,7 @@ void ion_client_destroy(struct ion_client *client)
 {
 	ion_client_put(client);
 }
-EXPORT_SYMBOL(ion_client_destroy);
+
 struct ion_client *ion_get_user_client(unsigned int fd_client)
 {
 	struct file *file;

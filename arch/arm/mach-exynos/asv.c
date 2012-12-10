@@ -16,7 +16,6 @@
 #include <linux/err.h>
 #include <linux/io.h>
 #include <linux/slab.h>
-#include <linux/module.h>
 
 #include <plat/cpu.h>
 
@@ -26,9 +25,7 @@
 
 static struct samsung_asv *exynos_asv;
 unsigned int exynos_result_of_asv;
-EXPORT_SYMBOL(exynos_result_of_asv);
 unsigned int exynos_special_flag;
-EXPORT_SYMBOL(exynos_special_flag);
 bool exynos_dynamic_ema;
 
 static int __init exynos4_asv_init(void)

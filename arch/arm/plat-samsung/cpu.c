@@ -14,7 +14,6 @@
 #include <linux/kernel.h>
 #include <linux/init.h>
 #include <linux/io.h>
-#include <linux/module.h>
 
 #include <asm/system.h>
 
@@ -22,7 +21,6 @@
 #include <plat/cpu.h>
 
 unsigned long samsung_cpu_id;
-EXPORT_SYMBOL(samsung_cpu_id);
 static unsigned int samsung_cpu_rev;
 
 unsigned int samsung_rev(void)
